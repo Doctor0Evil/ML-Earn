@@ -1,0 +1,178 @@
+aln_document {
+  header {
+    aln_version: "1.0";
+    qpu_math_profile: "QPU.Math+";
+    title: "High-Level Copilot Actions to Improve GitHub VMs";
+  }
+
+  section "overview" {
+    text
+    text_block: """
+intent: "Define five strategic Copilot-driven actions that make GitHub-hosted VMs (Codespaces and Actions runners) faster, safer, and more observable.";
+scope: ["GitHub Actions", "Codespaces", "Self-hosted runners", "Copilot Chat in IDEs"];
+    """;
+  }
+
+  section "actions_summary_table" {
+    text
+    text_block: """
+| # | Action name                                  | Primary target          |
+|---|----------------------------------------------|-------------------------|
+| 1 | Copilot VM bootstrap plans                   | VM provisioning         |
+| 2 | Telemetry-aware runbook agents               | CI incident handling    |
+| 3 | Cost and performance optimization passes     | Workflow YAML + tooling |
+| 4 | Policy- and secret-safe session envelopes    | Security on runners     |
+| 5 | Predictive failure and flakiness triage      | Tests & pipelines       |
+    """;
+  }
+
+  section "action_1" {
+    text
+    text_block: """
+name: "Copilot VM bootstrap plans";
+goal: "Standardize and optimize how GitHub VMs are provisioned, cached, and warmed using ALN-defined bootstrap recipes.";
+
+description: [
+  "Define `vm_bootstrap_plan` ALN entities that describe required tools, caches, datasets, and security hardening steps for each job type (build, test, deploy).",
+  "Enable Copilot to generate or refine these plans and produce idempotent setup scripts and workflow steps that minimize cold-start time on GitHub-hosted runners.",
+  "Use plan IDs to align Codespaces devcontainers and CI runners, so local and CI VMs share identical base images and diagnostics paths."
+];
+    """;
+  }
+
+  section "action_2" {
+    text
+    text_block: """
+name: "Telemetry-aware runbook agents";
+goal: "Have Copilot act as a runbook-driven incident agent on VMs, using CI telemetry and ALN playbooks.";
+
+description: [
+  "Define ALN `vm_runbook` profiles that map common VM and workflow symptoms (disk pressure, timeouts, missing tools) to investigation and remediation steps.",
+  "Expose CI and VM telemetry (durations, failure reasons, CubeScore-style metrics) to Copilot so it can propose runbook-compliant fixes rather than ad-hoc edits.",
+  "Let maintainers invoke a 'Diagnose failing VM job with Copilot' action that binds the session to the relevant runbook and telemetry slice."
+];
+    """;
+  }
+
+  section "action_3" {
+    text
+    text_block: """
+name: "Cost and performance optimization passes";
+goal: "Use Copilot to continuously optimize job layouts, caching, and parallelism on GitHub VMs.";
+
+description: [
+  "Provide Copilot with ALN `ci_optimization_plan` documents that declare latency and cost SLOs, allowed concurrency, and caching strategies for each workflow.",
+  "Allow Copilot to propose refactors such as splitting long jobs, reordering steps, using matrix builds, and tuning cache keys based on historical metrics dashboards.",
+  "Run scheduled 'optimization reviews' where Copilot inspects telemetry for slow or expensive workflows and opens PRs with ALN-linked change rationales."
+];
+    """;
+  }
+
+  section "action_4" {
+    text
+    text_block: """
+name: "Policy- and secret-safe session envelopes";
+goal: "Constrain Copilot's VM interactions so that suggestions respect org policies, secrets, and isolation requirements.";
+
+description: [
+  "Introduce ALN `vm_policy_envelope` objects that encode what Copilot may reference (logs, env vars, paths) from Actions or Codespaces VMs.",
+  "Ensure Copilot chat sessions launched from logs or dashboards are automatically wrapped in these envelopes, preventing leakage of secrets or sensitive telemetry.",
+  "Allow security teams to centrally manage envelopes at the org level and see where Copilot sessions intersect with high-sensitivity workflows."
+];
+    """;
+  }
+
+  section "action_5" {
+    text
+    text_block: """
+name: "Predictive failure and flakiness triage";
+goal: "Combine Copilot with CI metrics to reduce flaky tests and recurrent VM-level failures.";
+
+description: [
+  "Aggregate GitHub Actions metrics (success rate, MTTR, duration, throughput) and expose them as ALN `qos_signal` feeds scoped to workflows and test suites.",
+  "Let Copilot identify patterns like flaky tests, unstable runners, or misconfigured caches and generate targeted fixes plus ALN governance updates.",
+  "Provide a VM-centric 'stability view' where Copilot explains which jobs most hurt reliability and opens guided remediation sessions for each hotspot."
+];
+    """;
+  }
+
+  ###################################################################
+  # Implementation roadmap
+  ###################################################################
+  section "implementation_roadmap" {
+    text
+    text_block: """
+Phase 1 (Foundation):
+  - Action 1: Define vm_bootstrap_plan schema and create reference plans for common stacks (Node, Python, .NET, Go).
+  - Action 4: Draft vm_policy_envelope schema and implement envelope enforcement in Codespaces and Actions.
+
+Phase 2 (Intelligence):
+  - Action 2: Build vm_runbook profiles for top-10 failure modes and integrate telemetry feeds into Copilot context.
+  - Action 5: Deploy qos_signal aggregation pipelines and train Copilot on flakiness patterns.
+
+Phase 3 (Optimization):
+  - Action 3: Launch ci_optimization_plan schema and scheduled optimization review workflows.
+  - Action 3: Integrate cost metrics dashboards and enable Copilot-driven cost reduction PRs.
+
+Phase 4 (Scale):
+  - Extend all actions to support organization-level templates and multi-repo coordination.
+  - Add cross-repo analytics showing VM efficiency gains and security envelope compliance rates.
+    """;
+  }
+
+  ###################################################################
+  # Success metrics
+  ###################################################################
+  section "success_metrics" {
+    text
+    text_block: """
+VM bootstrap plans:
+  - 30% reduction in cold-start time for GitHub-hosted runners.
+  - 90% alignment between Codespaces and CI environments.
+
+Telemetry-aware runbook agents:
+  - 50% reduction in MTTR for common VM and workflow failures.
+  - 80% of incident sessions resolve using runbook-guided fixes.
+
+Cost and performance optimization:
+  - 20% reduction in workflow execution time for optimized repos.
+  - 15% reduction in Actions compute costs via caching and parallelism improvements.
+
+Policy- and secret-safe session envelopes:
+  - Zero secret leakage incidents from Copilot sessions on VMs.
+  - 100% coverage of high-sensitivity workflows with envelope enforcement.
+
+Predictive failure and flakiness triage:
+  - 40% reduction in flaky test occurrences within 90 days.
+  - 25% improvement in overall CI stability score.
+    """;
+  }
+
+  ###################################################################
+  # ALN integration points
+  ###################################################################
+  section "aln_integration_points" {
+    text
+    text_block: """
+vm_bootstrap_plan:
+  - Schema location: schemas/vm_bootstrap_plan.schema.json
+  - Consumed by: Copilot coding agent, Actions workflow templates, Codespaces devcontainer generators.
+
+vm_runbook:
+  - Schema location: schemas/vm_runbook.schema.json
+  - Consumed by: Copilot incident agents, telemetry dashboards, automated triage workflows.
+
+ci_optimization_plan:
+  - Schema location: schemas/ci_optimization_plan.schema.json
+  - Consumed by: Copilot optimization agents, workflow linters, cost analytics pipelines.
+
+vm_policy_envelope:
+  - Schema location: schemas/vm_policy_envelope.schema.json
+  - Consumed by: Copilot session managers, org security policies, audit logs.
+
+qos_signal:
+  - Schema location: schemas/qos_signal.schema.json
+  - Consumed by: Copilot flakiness agents, CI stability dashboards, predictive failure models.
+    """;
+  }
+}

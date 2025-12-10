@@ -1,0 +1,95 @@
+aln PROGRAM GitHubSessionPacerV1
+  meta:
+    id          "GITHUB-SESSION-PACER-001"
+    owner       "Doctor Jacob Scott Farmer"
+    scope       "VS Code GitHub auth sessions + GitSessionGuardian stack"
+    description "Detects high-frequency GitHub session polling in VS Code logs and applies safe backoff + remediation."
+  endmeta
+
+  env:
+    LOG_PATH             "c:/Users/Hunter/AppData/Roaming/Code/logs"
+    PATTERN_ALL          "Getting sessions for all scopes..."
+    PATTERN_SCOPED       "Getting sessions for read:user,repo,user:email,workflow..."
+    WINDOW_SECONDS       3600       # 1 hour window
+    MAX_CALLS_PER_WINDOW 200        # safety threshold for noise / perf
+    COOLDOWN_SECONDS     120
+  endenv
+
+  objects:
+    SessionPollStats struct:
+      windowStartUtc string
+      totalAll       int
+      totalScoped    int
+      lastLineUtc    string
+    endstruct
+  endobjects
+
+  function nowUtc() string
+  endfunction
+
+  function shell(cmd string, args []string) (string,int)
+  endfunction
+
+  function log(msg string)
+    shell("bash", ["-lc","echo \""+nowUtc()+" | "+msg+"\" >> github-session-pacer.log"])
+  endfunction
+
+  function readVSCodeLogTail() []string
+    out, _ := shell("bash", ["-lc",
+      "cd \""+LOG_PATH+"\" && ls -1t */*/*/window.log | head -n1 | xargs -r tail -n 500"
+    ])
+    return splitLines(out)
+  endfunction
+
+  function calcStats(lines []string) SessionPollStats
+    st := SessionPollStats{
+      windowStartUtc: nowUtc(),
+      totalAll: 0,
+      totalScoped: 0,
+      lastLineUtc: "",
+    }
+    for _, l in range lines
+      if contains(l, PATTERN_ALL) then
+        st.totalAll = st.totalAll + 1
+        st.lastLineUtc = nowUtc()
+      elseif contains(l, PATTERN_SCOPED) then
+        st.totalScoped = st.totalScoped + 1
+        st.lastLineUtc = nowUtc()
+      end if
+    endfor
+    return st
+  endfunction
+
+  function adviseUser(stats SessionPollStats)
+    log("ADVISE user: GitHub session polling high, all="+stats.totalAll.toString()+" scoped="+stats.totalScoped.toString())
+    print "GitHub auth extension is polling sessions frequently."
+    print "- Check VS Code Settings > Extensions > GitHub Authentication: reduce or disable background sign-in polling."
+    print "- Verify a single GitHub sign-in entry is active and revoke redundant tokens if any."
+    print "- If you use GitSessionGuardian, ensure it does not invoke extra VS Code auth commands inside hooks."
+  endfunction
+
+  function softReloadGitHubAuth()
+    # Safe: run VS Code command to reopen auth session list (no token deletion)
+    _, _ := shell("code", ["--command","github.provideSession"])
+    log("ACTION soft auth refresh requested")
+  endfunction
+
+  command monitor
+    log("START session-pacer monitor")
+    baseStart := nowUtc()
+    for
+      lines := readVSCodeLogTail()
+      stats := calcStats(lines)
+      if stats.totalAll + stats.totalScoped > MAX_CALLS_PER_WINDOW then
+        log("THRESHOLD exceeded: all="+stats.totalAll.toString()+" scoped="+stats.totalScoped.toString())
+        adviseUser(stats)
+        softReloadGitHubAuth()
+        sleep(COOLDOWN_SECONDS)
+        baseStart = nowUtc()
+      else
+        sleep(60)
+      end if
+    endfor
+  endcommand
+
+endprogram

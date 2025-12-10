@@ -1,0 +1,74 @@
+// .github/workflows/aln-github-actions-skeletons.aln
+
+text
+aln_bundle "github_actions_aln_ci_skeletons_v1" {
+
+  meta {
+    author: "Perplexity-ALN-Synthesizer";
+    created_utc: "2025-11-27T18:16:00Z";
+    policy_non_python_ci: true;
+    reference_github_actions_syntax: "https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions";
+    reference_copilot_policies: "https://docs.github.com/en/copilot/concepts/policies";
+    reference_ajv_ci_usage: "https://dev.to/franciscomendes10866/json-schema-validation-in-nodejs-using-ajv-53jd";
+  }
+
+  term "gitflow-aln-binder" {
+    category: "ci_cd_pipeline_role";
+    mandatory_for: ["nanoswarm_ci_repos", "virtual_hardware_twins_repos"];
+    properties: [
+      "requires_aln_source_reference",
+      "requires_ci_traceability",
+      "requires_governance_enforcement"
+    ];
+  }
+
+  term "sevmesh-gate" {
+    category: "risk_control_primitive";
+    numeric_bounds {
+      governance_coverage_min: 0.95;
+      critical_violation_threshold: 0;
+      high_violation_soft_cap: 10;
+    }
+  }
+
+  term "vm-identity-weave" {
+    category: "execution_environment_mapping";
+    required_fields: [
+      "runner_label",
+      "aln_vm_profile_id",
+      "telemetry_export_id",
+      "policy_contract_id"
+    ];
+  }
+
+  term "copilot-governmesh" {
+    category: "governance_mesh";
+    copilot_policy_binding: true;
+  }
+
+  section "aln_ci_workflow_manifest" {
+    text
+    text_block: """
+Materialized GitHub Actions workflows:
+- .github/workflows/aln-vm-bootstrap-validate.yml
+- .github/workflows/aln-device-twin-ci.yml
+- .github/workflows/aln-copilot-governance.yml
+- .github/workflows/aln-telemetry-export.yml
+- .github/workflows/aln-firmware-update-lane.yml
+- .github/workflows/aln-ci-core.yml
+
+Supporting scripts (Node.js, non-Python):
+- scripts/aln-to-json-projection.cjs
+- scripts/aln-ajv-mesh-sweep.cjs
+- scripts/aln-severity-gate.cjs
+- scripts/aln-copilot-metatest.cjs
+
+JSON Schema validation:
+- schemas/aln-core.schema.json
+
+These workflows bind ALN governance plans, VM profiles, and nanoswarm
+safety constraints into concrete CI/CD pipelines with verifiable
+execution-intent hashes and traceability.
+"""
+  }
+}

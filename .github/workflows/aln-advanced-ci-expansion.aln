@@ -1,0 +1,81 @@
+// .github/workflows/aln-advanced-ci-expansion.aln
+
+text
+aln_bundle "github_actions_aln_advanced_ci_v2" {
+
+  meta {
+    author: "Perplexity-ALN-Synthesizer";
+    created_utc: "2025-11-27T18:20:00Z";
+    reference_job_matrix: "https://notes.kodekloud.com/docs/GitHub-Actions-Certification/GitHub-Actions-Core-Concepts/Using-a-matrix-for-your-jobs";
+    reference_ajv_repo: "https://github.com/ajv-validator/ajv";
+    reference_copilot_auto_review: "https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review";
+  }
+
+  term "aln-json-projection" {
+    category: "serialization_profile";
+    required_fields: [
+      "projection_meta",
+      "aln_sections",
+      "aln_terms"
+    ];
+  }
+
+  term "multirun-weave" {
+    category: "ci_matrix_binding";
+    dimensions: [
+      "os",
+      "toolchain",
+      "sim_backend"
+    ];
+  }
+
+  term "vh-sim-invoke" {
+    category: "virtual_hardware_integration";
+    required_fields: [
+      "binary_path",
+      "mode",
+      "fleet_id",
+      "telemetry_channel"
+    ];
+  }
+
+  term "copilot-metatest" {
+    category: "governance_test";
+    enforced_via_ci: true;
+  }
+
+  section "aln_advanced_ci_implementation_notes" {
+    text
+    text_block: """
+Advanced CI capabilities implemented:
+
+1. ALN to JSON projection conversion (scripts/aln-to-json-projection.cjs)
+   - Deterministic serialization of .aln documents
+   - SHA-256 content hashing for integrity verification
+   - Metadata preservation for traceability
+
+2. Ajv mesh sweep validation (scripts/aln-ajv-mesh-sweep.cjs)
+   - Multi-schema validation across all projections
+   - Violation severity classification (critical/high)
+   - Automated report generation for severity gates
+
+3. Job matrix expansion (aln-device-twin-ci.yml)
+   - Multi-OS support (ubuntu-latest, windows-latest)
+   - Multiple toolchains (gcc, clang, rust-stable)
+   - Virtual hardware backends (vh-cpu, vh-qpu)
+
+4. Virtual-Hardwire simulator integration
+   - Standardized vh-sim-invoke descriptor
+   - Fleet-based simulation with telemetry channels
+   - Resource caps and runtime limits enforcement
+
+5. Copilot metaprompt testing (scripts/aln-copilot-metatest.cjs)
+   - Required command ID validation
+   - Disallowed phrase detection
+   - Governance alignment verification
+
+All scripts enforce non-Python runtime policy and integrate
+with GitHub Actions for automated governance enforcement.
+"""
+  }
+}

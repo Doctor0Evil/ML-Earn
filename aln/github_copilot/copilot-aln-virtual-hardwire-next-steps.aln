@@ -1,0 +1,490 @@
+filename: copilot-aln-virtual-hardwire-next-steps.aln
+destination-folder: /aln/github_copilot/
+
+aln_document {
+  header {
+    aln_version: "1.0";
+    qpu_math_profile: "QPU.Math+";
+    title: "Virtual-Hardwire Next Steps and VM Solutions for GitHub Platform";
+    design_scope: [
+      "GitHub-wide ALN governance",
+      "Virtual-Hardwire VM lifecycle",
+      "Codespaces and Actions virtualization",
+      "Repository-level virtual hardware twins",
+      "Policy-safe, non-Python execution targets"
+    ];
+    python_exclusion_policy: "No Python runtime or libraries; ALN targets bare-metal, RTOS, container, and WebAssembly runtimes.";
+    copilot_alignment_note: "This document extends Copilot's ALN understanding with platform-wide VM, Codespaces, and virtual-hardware twin control surfaces, designed to be parsed and acted on by Copilot agents, GitHub Actions, and Virtual-Hardwire backends without ambiguity or policy conflicts.";
+  }
+
+  ###################################################################
+  # 1. GitHub-wide Virtual-Hardwire enablement for all users
+  ###################################################################
+  section "virtual_hardwire_global_enablement" {
+    text
+    text_block: """
+aln_virtual_hardwire_global "github_platform_v1" {
+  scope: "platform-wide";
+  applicability: [
+    "github_com_public_repos",
+    "github_com_private_repos",
+    "github_enterprise_cloud",
+    "github_enterprise_server"
+  ];
+
+  execution_targets: [
+    "kvm_type1_hypervisor",
+    "hyperv_type1_hypervisor",
+    "esxi_type1_hypervisor",
+    "proxmox_kvm_cluster",
+    "qemu_kvm_codespaces",
+    "containerd_actions_runners",
+    "wasm32_wasi_sandboxes"
+  ];
+
+  quant_math_constraints {
+    constraint "vm_density_bound" {
+      statement: "forall h: host_machine. total_vcpu(h) / physical_cores(h) <= 2.0";
+      severity: "high";
+    }
+
+    constraint "vm_memory_oversubscription" {
+      statement: "forall h: host_machine. sum(vm.memory_gb for vm in vms(h)) <= 1.5 * physical_memory_gb(h)";
+      severity: "medium";
+    }
+
+    constraint "isolation_enforcement" {
+      statement: "forall vm1, vm2: guest_machine. if vm1.id != vm2.id then isolation(vm1, vm2) >= isolation_min_db";
+      severity: "critical";
+    }
+  }
+
+  policy_jurisdiction_matrix {
+    regions: [
+      {
+        id: "GLOBAL_DEFAULT";
+        data_residency: "REGION_AWARE";
+        export_constraints: ["no_plaintext_token_export", "no_cross_org_secret_leakage"];
+        approval_status: "PRODUCTION";
+      },
+      {
+        id: "EU_REGION";
+        data_residency: "EU_ONLY";
+        export_constraints: ["no_export_of_raw_ci_logs_outside_eu"];
+        approval_status: "PRODUCTION";
+      },
+      {
+        id: "US_REGION";
+        data_residency: "US_ONLY";
+        export_constraints: ["no_export_of_encrypted_secrets_outside_us_without_kms_policies"];
+        approval_status: "PRODUCTION";
+      }
+    ];
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 2. Standard VM solution profile for Codespaces and Actions
+  ###################################################################
+  section "vm_solutions_for_github" {
+    text
+    text_block: """
+aln_vm_solution "github_codespaces_and_actions_v1" {
+  twin_family_id: "GITHUB-VM-BASELINE-2025";
+  repo_binding: {
+    github_org: "*";
+    github_repo: "*";
+    scope: "all_repositories_with_aln_enabled";
+  };
+
+  virtual_machine_profile {
+    hypervisor_type: "Type1_or_Type2";
+    host_machine_class: ["x86_64", "ARM64"];
+    guest_os_images: [
+      "ubuntu-24_04-lts",
+      "debian-13",
+      "windows-server-2025-core"
+    ];
+    default_guest_machine {
+      vcpu_count: 4;
+      memory_gb: 8;
+      storage_gb: 64;
+      network_interfaces: 1;
+      isolation_level: "strong";
+    }
+  }
+
+  tooling_stack {
+    allowed_languages: [
+      "c",
+      "cpp",
+      "rust",
+      "zig",
+      "go",
+      "typescript",
+      "javascript",
+      "wasm32_wasi",
+      "verilog",
+      "vhdl"
+    ];
+    runtime_exclusions: [
+      "python2",
+      "python3",
+      "pip",
+      "conda",
+      "virtualenv"
+    ];
+    preinstalled_toolchains: [
+      "arm-none-eabi-gcc-13",
+      "clang-18",
+      "rust-1_83-stable",
+      "zig-0_13",
+      "nodejs-22-lts",
+      "wasm-tools-1_0"
+    ];
+  }
+
+  ci_integration {
+    default_github_actions_runner_images: [
+      "ubuntu-latest",
+      "windows-latest"
+    ];
+
+    vm_bootstrap_plan {
+      phases: [
+        "attach_ephemeral_storage",
+        "hydrate_toolchain_caches",
+        "restore_build_artifacts",
+        "enable_virtual_hardwire_hooks",
+        "start_repo_specific_agents"
+      ];
+      target_boot_time_ms: 15000;
+    }
+
+    quant_math_constraints {
+      constraint "ci_vm_cold_start" {
+        statement: "forall r: runner_invocation. boot_time_ms(r) <= 20000";
+        severity: "medium";
+      }
+
+      constraint "ci_workflow_duration" {
+        statement: "forall w: workflow_run. duration_ms(w) <= max_ci_duration_ms(w.repo_tier)";
+        severity: "medium";
+      }
+    }
+  }
+
+  qos_signal_profile {
+    metrics: [
+      "vm_boot_time_ms",
+      "vm_cpu_utilization_pct",
+      "vm_memory_utilization_pct",
+      "ci_workflow_success_rate",
+      "codespaces_startup_time_ms",
+      "codespaces_active_session_count"
+    ];
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 3. Virtual-Hardwire binding pattern reusable by any repo
+  ###################################################################
+  section "virtual_hardwire_binding_for_repos" {
+    text
+    text_block: """
+aln_virtual_hardware_binding_template "default_virtual_hardwire_repo_binding_v1" {
+  applicability: "any_github_repo_with_virtual_devices";
+
+  virtual_hardware_binding {
+    virtual_device_twin_types: [
+      "vm_twin",
+      "edge_device_twin",
+      "smart_city_node_twin",
+      "bci_or_neuromorphic_twin"
+    ];
+
+    binding_schema {
+      required_fields: [
+        "twin_id",
+        "github_org",
+        "github_repo",
+        "main_branch",
+        "execution_targets"
+      ];
+    }
+
+    quant_math_constraints {
+      constraint "twin_repo_alignment" {
+        statement: "forall t: device_twin. t.repo_binding.github_repo in allowed_repos(t.github_org)";
+        severity: "high";
+      }
+
+      constraint "simulation_to_fleet_consistency" {
+        statement: "forall d: deployed_device. simulated_firmware_hash(d) == deployed_firmware_hash(d)";
+        severity: "critical";
+      }
+    }
+  }
+
+  copilot_edit_plan {
+    allowed_operations: [
+      "add_new_virtual_twin",
+      "extend_vm_profiles",
+      "modify_ci_qos_targets",
+      "add_new_quant_math_constraints"
+    ];
+    disallowed_operations: [
+      "remove_safety_constraints",
+      "weaken_isolation_policies",
+      "enable_python_in_excluded_contexts"
+    ];
+    success_criteria: [
+      "aln_static_validation_passes",
+      "no_new_policy_violations",
+      "no_reduction_in_isolation_or_safety_severity"
+    ];
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 4. Per-repo ALN governance and VM selection
+  ###################################################################
+  section "repo_policy_and_vm_selection" {
+    text
+    text_block: """
+aln_repo_policy_contract "default_repo_policy_v1" {
+  repo_scope: {
+    github_org: "*";
+    github_repo: "*";
+  };
+
+  language_policy {
+    allowed_languages: [
+      "c",
+      "cpp",
+      "rust",
+      "zig",
+      "go",
+      "typescript",
+      "javascript",
+      "verilog",
+      "vhdl",
+      "wasm32_wasi"
+    ];
+    disallowed_languages: [
+      "python"
+    ];
+  }
+
+  vm_selection_matrix {
+    rules: [
+      {
+        id: "small_repo_default";
+        condition: "repo_size_mb <= 256 && ci_runtime_minutes <= 10";
+        vm_profile: {
+          vcpu_count: 2;
+          memory_gb: 4;
+          storage_gb: 32;
+        };
+      },
+      {
+        id: "medium_repo_default";
+        condition: "repo_size_mb > 256 && repo_size_mb <= 1024";
+        vm_profile: {
+          vcpu_count: 4;
+          memory_gb: 8;
+          storage_gb: 64;
+        };
+      },
+      {
+        id: "large_repo_default";
+        condition: "repo_size_mb > 1024";
+        vm_profile: {
+          vcpu_count: 8;
+          memory_gb: 16;
+          storage_gb: 128;
+        };
+      }
+    ];
+  }
+
+  security_invariant_set {
+    invariants: [
+      "no_plaintext_secrets_in_repos",
+      "no_unencrypted_ssh_keys_in_ci",
+      "no_public_exposure_of_private_artifacts",
+      "enforce_code_signing_for_release_artifacts"
+    ];
+  }
+
+  telemetry_pipeline_spec {
+    fields: [
+      "workflow_id",
+      "repo_id",
+      "vm_id",
+      "start_timestamp",
+      "end_timestamp",
+      "cpu_time_ms",
+      "memory_peak_mb",
+      "success_flag"
+    ];
+    retention_days: 90;
+  }
+
+  quant_math_constraints {
+    constraint "vm_resource_headroom" {
+      statement: "forall w: workflow_run. cpu_peak_pct(w) <= 90 && memory_peak_pct(w) <= 90";
+      severity: "medium";
+    }
+
+    constraint "ci_failure_rate_bound" {
+      statement: "forall r: repo. rolling_failure_rate_30d(r) <= 0.10";
+      severity: "medium";
+    }
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 5. Example: GitHub-wide VM twin + Virtual-Hardwire integration
+  ###################################################################
+  section "executable_example_github_vm_twin" {
+    text
+    text_block: """
+aln_device_twin "github_vm_runner_standard_v1" {
+  twin_id: "GITHUB-VM-RUNNER-STD-4VCPU-8GB";
+  physical_device_sku: "CLOUD-VM-GENERIC-4x8";
+  repo_binding: {
+    github_org: "*";
+    github_repo: "*";
+    main_branch: "main";
+  };
+
+  execution_targets: [
+    "actions_runner_container",
+    "codespaces_vm_guest",
+    "kvm_guest_vm"
+  ];
+
+  io_profile {
+    cpu_arch: ["x86_64", "arm64"];
+    vcpu_count: 4;
+    memory_gb: 8;
+    storage_gb: 64;
+    network_bandwidth_mbps: 1000;
+  }
+
+  safety_envelope {
+    max_cpu_utilization_pct: 95;
+    max_memory_utilization_pct: 95;
+    max_iops: 20000;
+    emergency_shutdown_latency_ms: 5000;
+  }
+
+  virtual_hardware_binding {
+    twin_family_id: "GITHUB-VM-BASELINE-2025";
+    actions_pool_ids: ["github-hosted-default", "enterprise-hosted-default"];
+    codespaces_templates: [
+      "default_ubuntu_devcontainer",
+      "minimal_rust_devcontainer"
+    ];
+  }
+
+  quant_math_constraints {
+    constraint "vm_cpu_headroom" {
+      statement: "forall r: runner_session. cpu_peak_pct(r) <= max_cpu_utilization_pct";
+      severity: "medium";
+    }
+
+    constraint "vm_memory_headroom" {
+      statement: "forall r: runner_session. memory_peak_pct(r) <= max_memory_utilization_pct";
+      severity: "medium";
+    }
+
+    constraint "codespaces_startup_latency" {
+      statement: "forall c: codespace. startup_time_ms(c) <= 30000";
+      severity: "medium";
+    }
+  }
+
+  ci_integration {
+    github_workflow_file: ".github/workflows/ci.yml";
+
+    build_matrix: {
+      toolchains: [
+        "clang-18",
+        "gcc-14",
+        "rust-1_83"
+      ];
+      targets: [
+        "linux_x86_64",
+        "linux_arm64",
+        "wasm32_wasi"
+      ];
+    };
+
+    runtime_exclusions: [
+      "python2",
+      "python3",
+      "pip",
+      "conda",
+      "virtualenv"
+    ];
+
+    jobs {
+      job "build_and_test" {
+        runs_on: "github_vm_runner_standard_v1";
+        steps: [
+          "checkout_repo",
+          "hydrate_toolchain_cache",
+          "compile_all_targets",
+          "run_unit_tests",
+          "run_integration_tests"
+        ];
+        success_criteria: [
+          "all_tests_pass",
+          "cpu_peak_pct_below_90",
+          "memory_peak_pct_below_90"
+        ];
+      }
+
+      job "virtual_hardwire_simulation" {
+        runs_on: "github_vm_runner_standard_v1";
+        needs: ["build_and_test"];
+        steps: [
+          "load_virtual_twin e: github_vm_runner_standard_v1",
+          "replay_recent_ci_workflows",
+          "evaluate_quant_math_constraints"
+        ];
+        success_criteria: [
+          "no_constraint_violations",
+          "no_unbounded_resource_usage"
+        ];
+      }
+    }
+  }
+
+  audit_and_observability {
+    qos_signals: [
+      "vm_boot_time_ms",
+      "ci_queue_time_ms",
+      "ci_success_rate",
+      "codespaces_startup_time_ms"
+    ];
+
+    evidence_retention {
+      logs_days: 90;
+      artifacts_days: 30;
+    };
+  }
+}
+    """;
+  }
+}

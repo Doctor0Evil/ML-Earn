@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aln.schema/core/v1",
+  "title": "ALN Core Schema",
+  "description": "JSON Schema for ALN (Advanced Language Notation) document projections",
+  "type": "object",
+  "required": ["projection_meta", "aln_sections"],
+  "properties": {
+    "projection_meta": {
+      "type": "object",
+      "required": ["source_file", "converted_utc", "profile", "version"],
+      "properties": {
+        "source_file": {
+          "type": "string",
+          "description": "Path to source .aln file"
+        },
+        "converted_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of conversion"
+        },
+        "profile": {
+          "type": "string",
+          "enum": ["aln-json-projection"],
+          "description": "Projection profile identifier"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "ALN version"
+        }
+      }
+    },
+    "aln_sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["section"]
+          }
+        }
+      }
+    },
+    "aln_terms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["term"]
+          }
+        }
+      }
+    },
+    "raw_content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of source content"
+    }
+  }
+}

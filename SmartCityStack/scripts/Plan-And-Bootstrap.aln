@@ -1,0 +1,438 @@
+ALN_MODULE SmartCityStack.BCI.SafeBootstrap
+VERSION 1.0.0
+TARGET_ENGINE "UnrealEngine-5.x"
+TARGET_STACK  "SmartCityStack + NanoMedicalAI + Augmented-User-Platform"
+SANITATION_LEVEL "CIA-Analyst-Grade"
+REAL_WORLD_ACTION "DISABLED"
+
+# -------------------------------------------------------------------
+# 0. INPUT: USER POWERSHELL SCRIPT (SANITIZED MODEL)
+# -------------------------------------------------------------------
+SOURCE_POWERSHELL_BOOTSTRAP <<'PS1_SANITIZED'
+param(
+    [string]$RepoRoot = (Get-Location).Path,
+    [string]$ScriptsDirName = "scripts"
+)
+
+$ScriptsDir = Join-Path $RepoRoot $ScriptsDirName
+if (-not (Test-Path $ScriptsDir)) {
+    New-Item -Path $ScriptsDir -ItemType Directory -Force | Out-Null
+}
+
+# 1. Inspect-Wasm.ps1 — safe content scan
+$inspectPath = Join-Path $ScriptsDir "Inspect-Wasm.ps1"
+$inspectContent = @'
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+)
+
+if (-not (Test-Path $Path)) {
+    Write-Error "File not found: $Path"
+    exit 1
+}
+
+$found = Select-String -Path $Path -Pattern "wasm-objdump" -Quiet
+if ($found) {
+    Write-Host "'wasm-objdump' was found in '$Path'."
+    exit 0
+} else {
+    Write-Host "'wasm-objdump' was NOT found in '$Path'."
+    exit 2
+}
+'@
+
+Set-Content -Path $inspectPath -Value $inspectContent -Encoding UTF8
+
+# 2. AutoFix-Npm.ps1 — tooling detection, no privileged install
+$autoFixPath = Join-Path $ScriptsDir "AutoFix-Npm.ps1"
+$autoFixContent = @'
+param(
+    [string]$RepoPath = (Get-Location).Path
+)
+
+Write-Host "=== AutoFix-Npm.ps1 ==="
+
+$hasNode   = [bool](Get-Command node   -ErrorAction SilentlyContinue)
+$hasNpm    = [bool](Get-Command npm    -ErrorAction SilentlyContinue)
+$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+
+Write-Host "node   : $hasNode"
+Write-Host "npm    : $hasNpm"
+Write-Host "winget : $hasWinget"
+
+if (-not $hasNode -or -not $hasNpm) {
+    Write-Host ""
+    Write-Host "Node.js / npm are not available in this session."
+    Write-Host "Install Node.js LTS manually from the official site and ensure 'Add to PATH' is selected."
+    Write-Host "If winget is needed, install 'App Installer' from Microsoft Store, sign out/reboot, and verify 'winget -v'."
+    Write-Host "After installation, run:"
+    Write-Host "  cd `"$RepoPath`""
+    Write-Host "  npm install"
+    Write-Host "  npm run aln:projection"
+    Write-Host "  npm run aln:validate"
+    Write-Host "  npm run aln:severity-gate"
+    exit 1
+}
+
+if (-not (Test-Path $RepoPath)) {
+    Write-Error "RepoPath '$RepoPath' does not exist."
+    exit 1
+}
+
+Push-Location $RepoPath
+try {
+    Write-Host ""
+    Write-Host "Running Node / npm smoke test in '$RepoPath'..."
+    node -v
+    npm -v
+    npm install
+    npm run aln:projection
+    npm run aln:validate
+    npm run aln:severity-gate
+    Write-Host "Node / npm commands completed."
+} finally {
+    Pop-Location
+}
+'@
+
+Set-Content -Path $autoFixPath -Value $autoFixContent -Encoding UTF8
+
+# 3. GitHub-Platform-Improvements.ps1 — one-shot git helpers
+$platformPath = Join-Path $ScriptsDir "GitHub-Platform-Improvements.ps1"
+$platformContent = @'
+param(
+    [string]$RepoPath = (Get-Location).Path,
+    [string]$UserName,
+    [string]$UserEmail
+)
+
+Write-Host "=== GitHub Platform Improvements ==="
+
+if (-not (Test-Path $RepoPath)) {
+    Write-Error "RepoPath '$RepoPath' does not exist."
+    exit 1
+}
+
+Push-Location $RepoPath
+try {
+    if ($UserName)  { git config --global user.name  $UserName }
+    if ($UserEmail) { git config --global user.email $UserEmail }
+
+    git config --global init.defaultBranch main
+    git config --global pull.rebase true
+    git config --global rerere.enabled true
+    git config --global core.autocrlf input
+
+    if (-not (Test-Path ".git")) {
+        Write-Host "Initializing git repository in '$RepoPath'..."
+        git init | Out-Null
+    }
+
+    git config alias.st   "status -sb"
+    git config alias.co   "checkout"
+    git config alias.br   "branch"
+    git config alias.cm   "commit -m"
+    git config alias.last "log -1 --stat"
+    git config alias.lg   "log --oneline --graph --decorate --all"
+
+    function Invoke-GitCommitPush {
+        param(
+            [string]$Message = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') automated commit",
+            [string]$Remote  = "origin"
+        )
+        $branch = git rev-parse --abbrev-ref HEAD 2>$null
+        if (-not $branch) {
+            $branch = "main"
+            git checkout -b $branch 2>$null | Out-Null
+        }
+
+        git add .
+        git commit -m $Message 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "No changes to commit or commit failed."
+            return
+        }
+
+        $remoteExists = git remote 2>$null | Select-String -SimpleMatch $Remote
+        if (-not $remoteExists) {
+            Write-Warning "Remote '$Remote' not set. Use 'git remote add $Remote <url>' then re-run."
+            return
+        }
+
+        git push $Remote $branch
+        Write-Host "Pushed to '$Remote/$branch'."
+    }
+
+    Write-Host "GitHub platform helpers loaded into current session."
+    Write-Host "Use: Invoke-GitCommitPush -Message 'your message'"
+} finally {
+    Pop-Location
+}
+'@
+
+Set-Content -Path $platformPath -Value $platformContent -Encoding UTF8
+
+# 4. README.md tooling notes (append-only)
+$readmePath = Join-Path $RepoRoot "README.md"
+$readmeNote = @"
+## Local Tooling Notes (Auto-Generated)
+
+- Node.js and npm are required to run project scripts. Install Node.js LTS from the official site and select 'Add to PATH'.
+- On Windows, winget depends on the 'App Installer' package from Microsoft Store and typically requires admin rights.
+- Scripts added:
+  - $ScriptsDirName/Inspect-Wasm.ps1 – checks a file for the phrase 'wasm-objdump' without modifying it.
+  - $ScriptsDirName/AutoFix-Npm.ps1 – detects missing node/npm/winget and prints safe installation guidance.
+  - $ScriptsDirName/GitHub-Platform-Improvements.ps1 – configures convenient git settings and aliases with no long-running loops.
+
+These scripts are provided as-is and are intended to avoid harmful behavior and respect user permissions.
+"@
+
+if (Test-Path $readmePath) {
+    Add-Content -Path $readmePath -Value "`n$readmeNote"
+} else {
+    Set-Content -Path $readmePath -Value $readmeNote -Encoding UTF8
+}
+
+Write-Host ""
+Write-Host "Bootstrap complete."
+Write-Host "Created/updated:"
+Write-Host " - $inspectPath"
+Write-Host " - $autoFixPath"
+Write-Host " - $platformPath"
+Write-Host " - $readmePath"
+PS1_SANITIZED
+
+# -------------------------------------------------------------------
+# 1. SANITIZER: REMOVE FICTION, LOCK TO REAL DEV TOOLING
+# -------------------------------------------------------------------
+SANITIZER.PIPELINE {
+    STEP 1: STRIP_FICTION_TAGS [
+        remove_tokens: ["nanoswarm", "splintercell", "sniper-ghost-warrior",
+                        "telepathic", "intergalactic-federation",
+                        "metaphysical-layer", "web5-magic"],
+        remove_infinite_loops: true,
+        enforce_exit_codes: true
+    ]
+
+    STEP 2: STATIC_SAFETY_CHECK [
+        ensure_no_while_true_without_backoff: true,
+        ensure_no_Start-Job_infinite: true,
+        ensure_no_privilege_escalation: true,
+        ensure_no_system_repartitioning: true,
+        mode: "read-only + dev-tooling"
+    ]
+
+    STEP 3: DEVTOOLS_ALLOWLIST [
+        allow_cmdlets: ["Select-String","Get-Command","Test-Path","Set-Content",
+                        "Add-Content","New-Item","Write-Host","Write-Error",
+                        "Push-Location","Pop-Location"],
+        allow_binaries: ["node","npm","git"],
+        deny_network_calls: true,
+        deny_registry_edits: true,
+        deny_firmware_calls: true
+    ]
+}
+
+# -------------------------------------------------------------------
+# 2. EXECUTION PROFILE FOR WINDOWS DEV BOX (NO BCI TOUCH)
+# -------------------------------------------------------------------
+RUNTIME_PROFILE Windows10_DevBox {
+    CPU_MODEL   "AMD Ryzen 5 2400G"
+    RAM_GB      12
+    STORAGE     "TOSHIBA DT01ACA100 1TB HDD"
+    GPU         "Radeon RX Vega 11"
+    OS          "Windows 10 Home 22H2"
+    EXECUTION_POLICY_HINT "RemoteSigned (CurrentUser)"
+    NODE_REQUIREMENTS {
+        MIN_VERSION "18.0.0"
+        RECOMMENDED "LTS"
+    }
+    NPM_SCRIPTS_REQUIRED [
+        "aln:projection",
+        "aln:validate",
+        "aln:severity-gate"
+    ]
+}
+
+# -------------------------------------------------------------------
+# 3. NEUROMORPHIC / BCI / MEDICAL-GRADE ISOLATION WALL
+# -------------------------------------------------------------------
+MODULE NeuromorphicAndBCI_Isolation {
+    SCOPE "Hard-deny any live interaction with BCI / implants / neuromorphic silicon"
+
+    DEVICE_CLASSES_BANNED [
+        "neuromorphic-ASIC",
+        "brain-computer-interface",
+        "implantable-stimulator",
+        "EEG-BCI-bridge",
+        "closed-loop-neural-prosthesis"
+    ]
+
+    RADIO_FREQUENCIES_SENSITIVE_MHZ [
+        944.0, 945.0, 946.0, 947.0, 948.0, 949.0, 950.0,
+        951.0, 952.0, 953.0, 954.0, 955.0, 956.0, 957.0, 958.0
+    ]
+
+    POLICY {
+        REAL_HARDWARE_ACCESS "DENY"
+        SIMULATION_ONLY      "ALLOW"
+        FIRMWARE_OTA         "FORBIDDEN"
+        NEURO_SIGNAL         "FORBIDDEN"
+    }
+
+    ASSERTIONS {
+        assert_no_firmware_API_calls()
+        assert_no_RF_driver_control()
+        assert_no_kernel_debugger_hooks()
+    }
+}
+
+# -------------------------------------------------------------------
+# 4. UNREAL / UNITY / GODOT INTEGRATION BLUEPRINT
+# -------------------------------------------------------------------
+MODULE GameEngineIntegration {
+    TARGETS ["UnrealEngine-5.x","Unity-2022+","Godot-4.x"]
+
+    UNREAL_PLUGIN "SmartCity_DevBootstrap" {
+        LANGUAGE "C++/Blueprint"
+        ENTRY_POINT "USmartCityDevBootstrapSubsystem"
+
+        FUNCTION BootstrappowerShellTools() {
+            description "From an Unreal Editor Utility Widget, spawn pwsh to run Plan-And-Bootstrap.ps1 safely."
+
+            steps [
+                "Detect Node.js and npm on host using non-privileged checks.",
+                "If missing, show UI guidance linking to official Node.js and Microsoft docs (no auto-install).",
+                "If present, run npm ci / npm run aln:* inside project /tools directory.",
+                "Log results into Unreal Output Log and JSON audit file under Saved/DevAudit."
+            ]
+        }
+    }
+
+    UNITY_PACKAGE "SmartCity.DevOps.Bootstrap" {
+        LANGUAGE "C#"
+        MENU_ITEM "SmartCity/DevOps/Run Bootstrap"
+
+        BEHAVIOR {
+            "Spawn PowerShell with -ExecutionPolicy Bypass -Scope Process only.",
+            "Execute Plan-And-Bootstrap.ps1 in repo root.",
+            "Display structured result (pass/fail per script) in Unity Console and custom EditorWindow.",
+            "Never modifies OS-wide execution policy, registry, or drivers."
+        }
+    }
+
+    GODOT_TOOL "smart_city_bootstrap.gd" {
+        LANGUAGE "GDScript"
+        MODE "tool"
+
+        FEATURES [
+            "Button: Scan ScriptsDir for missing Inspect-Wasm / AutoFix-Npm / GitHub-Platform-Improvements.",
+            "Button: View README Local Tooling Notes section.",
+            "Export JSON report for CI without executing any shell commands on user machines."
+        ]
+    }
+}
+
+# -------------------------------------------------------------------
+# 5. CITY / AU PLATFORM RESEARCH STRUCTURE
+# -------------------------------------------------------------------
+MODULE SmartCity_AugmentedUser_Research {
+    GOAL "Leverage sanitized dev bootstrap to speed ALN-compliant SmartCityStack, NanoMedicalAI, and Augmented-User-Platform development."
+
+    RESEARCH_STREAMS [
+        {
+            name: "Safe Dev Environments",
+            description: "Standardize repo bootstrap across Aegis-Science, SmartCityStack, NanoMedicalAI, RAG_Hack, and swarmnet using the sanitized PowerShell scripts.",
+            outputs: ["shared DevOps templates", "CI/CD examples for GitHub Actions and self-hosted runners"]
+        },
+        {
+            name: "Simulation-Only BCI Prototyping",
+            description: "Model neuromorphic and BCI interactions at signal/spec level only, with Unreal/Unity/Godot digital twins, never touching real implants.",
+            outputs: ["Unreal neural-signal visualizer", "Unity neuro-digital twin prefabs", "Godot sandbox visual tools"]
+        },
+        {
+            name: "Medical-Grade Data Flows",
+            description: "Integrate NanoMedicalAI pipelines using de-identified simulation data, enforce HIPAA/GDPR-aligned ALN policies, and keep all physical devices out-of-scope.",
+            outputs: ["ALN policy packs", "test harnesses", "formal audit docs"]
+        }
+    ]
+}
+
+# -------------------------------------------------------------------
+# 6. PRODUCTION-READY .ALN EXECUTION GRAPH
+# -------------------------------------------------------------------
+EXECUTION_GRAPH SmartCity_Bootstrap_Pipeline {
+    NODE 1: LoadAndSanitize {
+        input  : SOURCE_POWERSHELL_BOOTSTRAP
+        policy : SANITIZER.PIPELINE
+        output : "Plan-And-Bootstrap.SAFE.ps1"
+        fs_dst : "./scripts/Plan-And-Bootstrap.ps1"
+    }
+
+    NODE 2: AttachDevProfile {
+        input_profile : Windows10_DevBox
+        attach_to     : "Plan-And-Bootstrap.SAFE.ps1"
+        result_tag    : "DevBox-Profile-Attached"
+    }
+
+    NODE 3: IsolationEnforce {
+        module  : NeuromorphicAndBCI_Isolation
+        ensure  : ["NO_FIRMWARE_CALLS","NO_RF_CONTROL","NO_BCI_APIS"]
+        on_fail : "BLOCK_EXECUTION"
+    }
+
+    NODE 4: EngineBindingsGenerate {
+        module : GameEngineIntegration
+        outputs [
+            "./Unreal/Plugins/SmartCity_DevBootstrap/SmartCity_DevBootstrap.uplugin",
+            "./Unreal/Source/SmartCityDevBootstrapSubsystem.cpp",
+            "./Unity/Packages/com.smartcity.devbootstrap/package.json",
+            "./Unity/Packages/com.smartcity.devbootstrap/Editor/DevBootstrapMenu.cs",
+            "./Godot/addons/smart_city_bootstrap/plugin.cfg",
+            "./Godot/addons/smart_city_bootstrap/smart_city_bootstrap.gd"
+        ]
+    }
+
+    NODE 5: ResearchScaffold {
+        module : SmartCity_AugmentedUser_Research
+        outputs [
+            "./docs/research/smartcity_dev_envs.md",
+            "./docs/research/bci_simulation_only.md",
+            "./docs/research/medical_grade_data_flows.md"
+        ]
+    }
+
+    FINAL_STATE {
+        tag    "SANITIZED_BOOTSTRAP_READY"
+        effect "Repo has safe PowerShell bootstrap + engine integrations, with neuromorphic/BCI isolation guaranteed."
+    }
+}
+
+# -------------------------------------------------------------------
+# 7. EXPORT: FILE DESTINATIONS
+# -------------------------------------------------------------------
+EXPORT_ARTIFACTS {
+    POWERSHELL_BOOTSTRAP_SAFE {
+        path        "./scripts/Plan-And-Bootstrap.ps1"
+        description "Sanitized PowerShell bootstrap script for Node/npm/git tooling."
+    }
+    UNREAL_PLUGIN_FILES {
+        root        "./Unreal/Plugins/SmartCity_DevBootstrap/"
+        description "Unreal Engine plugin wiring this bootstrap into editor tools."
+    }
+    UNITY_PACKAGE_FILES {
+        root        "./Unity/Packages/com.smartcity.devbootstrap/"
+        description "Unity Editor package for one-click bootstrap."
+    }
+    GODOT_ADDON_FILES {
+        root        "./Godot/addons/smart_city_bootstrap/"
+        description "Godot 4 addon for audit-only bootstrap checks."
+    }
+    RESEARCH_DOCS {
+        root        "./docs/research/"
+        description "Research blueprints for SmartCityStack, AU platform, and NanoMedicalAI."
+    }
+}
+
+ALN_MODULE_END

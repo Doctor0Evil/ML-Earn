@@ -1,0 +1,31 @@
+rules:
+  - id: no-catch-all
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except Exception as e:
+            ...
+    message: "Catch-all exception handlers may hide errors; prefer specific error types and logging."
+    languages: [python]
+    severity: WARNING
+
+  - id: missing-default-switch
+    patterns:
+      - pattern: |
+          switch (...) {
+            ...
+          }
+    message: "Switch statements should include a default case that logs or handles unknown states."
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: unguarded-if
+    patterns:
+      - pattern: |
+          if (...) {
+            ...
+          }
+    message: "Introducing ungarded control-flow changes in critical functions can cause regressions. Ensure tests and logging are updated."
+    languages: [javascript, typescript]
+    severity: INFO

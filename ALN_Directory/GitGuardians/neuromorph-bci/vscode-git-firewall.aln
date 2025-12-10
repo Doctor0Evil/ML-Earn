@@ -1,0 +1,553 @@
+aln PROGRAM GitSessionGuardianV1
+  meta:
+    id          "GIT-GUARDIAN-VSCode-001"
+    owner       "Doctor Jacob Scott Farmer"
+    scope       "Local VS Code git, multi-repo, multi-remote"
+    platform    "Win10/Win11, Linux, macOS"
+    engines     ["git>=2.40", "VSCode>=1.90", "Node>=20"]
+    target_engines ["UnrealEngine5", "Unity6000", "Godot4"]
+    description "Prevents destructive VS Code git UI operations; enforces safe, deterministic push flows with rollback, snapshots, and audit."
+  endmeta
+
+  env:
+    SAFE_BRANCHES          ["main","master","prod","release"]
+    WORK_BRANCH_PREFIXES   ["feat/","fix/","chore/","experiment/"]
+    SNAPSHOT_DIR           ".git/git-guardian-snapshots"
+    AUDIT_LOG              ".git/git-guardian-audit.jsonl"
+    DEFAULT_REMOTE         "origin"
+    DEFAULT_PUSH_MODE      "safe-push"
+    REBASE_ALLOWED         false
+    FORCE_PUSH_ALLOWED     false
+    AUTO_STASH_ON_PULL     true
+    AUTO_SNAPSHOT_ON_COMMIT true
+    AUTO_SNAPSHOT_ON_REBASE true
+    AUTO_SNAPSHOT_ON_MERGE true
+    MAX_SNAPSHOTS          128
+    HARD_BLOCK_ON_CONFIG_FAILURE true
+  endenv
+
+  objects:
+    GitState struct:
+      repoRoot       string
+      branch         string
+      tracking       string
+      remote         string
+      ahead          int
+      behind         int
+      dirty          bool
+      rebaseInProgress bool
+      mergeInProgress  bool
+      lastSnapshotId  string
+      userName       string
+      userEmail      string
+    endstruct
+
+    Snapshot struct:
+      id           string
+      branch       string
+      headCommit   string
+      timestampUtc string
+      type         string   # "pre-rebase","post-rebase","pre-merge","pre-pull","pre-push"
+      details      map[string]string
+    endstruct
+
+    AuditEntry struct:
+      timestampUtc string
+      repoRoot     string
+      branch       string
+      action       string
+      outcome      string
+      reason       string
+      details      map[string]string
+    endstruct
+  endobjects
+
+  # ========== CORE UTILITIES ==========
+
+  function nowUtc() string
+    # implementation: RFC3339 UTC
+  endfunction
+
+  function uuidV4() string
+    # implementation: cryptographic-safe random UUID v4
+  endfunction
+
+  function shell(cmd string, args []string) (string,int)
+    # Execute command, return (stdout, exitCode).
+  endfunction
+
+  function git(state *GitState, args []string) (string,int)
+    return shell("git", args)
+  endfunction
+
+  function logAudit(entry AuditEntry)
+    serialized := json.encode(entry)
+    shell("bash", ["-lc", "mkdir -p \""+state.repoRoot+"/.git\" && echo '"+serialized+"' >> \""+AUDIT_LOG+"\""])
+  endfunction
+
+  function ensureGitConfig(state *GitState) bool
+    outName, rc1 := git(state, ["config","--get","user.name"])
+    outMail, rc2 := git(state, ["config","--get","user.email"])
+    if rc1!=0 or rc2!=0 then
+      if HARD_BLOCK_ON_CONFIG_FAILURE then
+        logAudit(AuditEntry{
+          timestampUtc: nowUtc(),
+          repoRoot: state.repoRoot,
+          branch: state.branch,
+          action: "config-check",
+          outcome: "blocked",
+          reason: "user.name or user.email missing",
+          details: {"stdout_name": outName, "stdout_email": outMail}
+        })
+        return false
+      else
+        return true
+      end if
+    end if
+    state.userName  = trim(outName)
+    state.userEmail = trim(outMail)
+    return true
+  endfunction
+
+  function detectRepoRoot() string
+    out, rc := shell("git", ["rev-parse","--show-toplevel"])
+    if rc!=0 then
+      return ""
+    end if
+    return trim(out)
+  endfunction
+
+  function refreshState() GitState
+    root := detectRepoRoot()
+    state := GitState{
+      repoRoot: root,
+      branch: "",
+      tracking: "",
+      remote: DEFAULT_REMOTE,
+      ahead: 0,
+      behind: 0,
+      dirty: false,
+      rebaseInProgress: false,
+      mergeInProgress: false,
+      lastSnapshotId: ""
+    }
+
+    if root=="" then
+      return state
+    end if
+
+    # branch
+    outBranch, _ := git(&state, ["rev-parse","--abbrev-ref","HEAD"])
+    state.branch = trim(outBranch)
+
+    # rebase / merge flags
+    _, rebaseRc := shell("bash", ["-lc","[ -d .git/rebase-apply -o -d .git/rebase-merge ]"])
+    state.rebaseInProgress = (rebaseRc==0)
+    _, mergeRc := shell("bash", ["-lc","[ -f .git/MERGE_HEAD ]"])
+    state.mergeInProgress = (mergeRc==0)
+
+    # status
+    status, _ := git(&state, ["status","--porcelain=v1","-b"])
+    lines := splitLines(status)
+    for i,l in enumerate(lines)
+      if i==0 then
+        # ## main...origin/main [ahead 1, behind 2]
+        state.ahead, state.behind = parseAheadBehind(l)
+        state.tracking, state.remote = parseTracking(l, DEFAULT_REMOTE)
+      else
+        if trim(l)!="" then
+          state.dirty = true
+        end if
+      end if
+    endfor
+
+    ensureGitConfig(&state)
+    return state
+  endfunction
+
+  function parseAheadBehind(line string) (int,int)
+    ahead := 0
+    behind := 0
+    # parse tokens "ahead N", "behind M"
+    # ...
+    return ahead, behind
+  endfunction
+
+  function parseTracking(line, defaultRemote string) (string,string)
+    tracking := ""
+    remote := defaultRemote
+    # derive tracking ref (e.g. origin/main) and remote
+    return tracking, remote
+  endfunction
+
+  # ========== SNAPSHOT ENGINE ==========
+
+  function ensureSnapshotDir(state *GitState)
+    shell("bash", ["-lc", "mkdir -p \""+state.repoRoot+"/"+SNAPSHOT_DIR+"\""])
+  endfunction
+
+  function createSnapshot(state *GitState, kind string, extra map[string]string) Snapshot
+    ensureSnapshotDir(state)
+    head, _ := git(state, ["rev-parse","HEAD"])
+    snap := Snapshot{
+      id: uuidV4(),
+      branch: state.branch,
+      headCommit: trim(head),
+      timestampUtc: nowUtc(),
+      type: kind,
+      details: extra,
+    }
+    path := state.repoRoot+"/"+SNAPSHOT_DIR+"/"+snap.id+".json"
+    shell("bash", ["-lc", "echo '"+json.encode(snap)+"' > \""+path+"\""])
+
+    # maintain MAX_SNAPSHOTS
+    shell("bash", ["-lc",
+      "cd \""+state.repoRoot+"\" && ls -1t \""+SNAPSHOT_DIR+"\" | tail -n +"+(MAX_SNAPSHOTS+1).toString()+" | xargs -r -I{} rm \""+SNAPSHOT_DIR+"/{}\""
+    ])
+
+    state.lastSnapshotId = snap.id
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "snapshot-create",
+      outcome: "ok",
+      reason: kind,
+      details: {"snapshotId": snap.id}
+    })
+    return snap
+  endfunction
+
+  function restoreSnapshot(state *GitState, snapId string) bool
+    path := state.repoRoot+"/"+SNAPSHOT_DIR+"/"+snapId+".json"
+    content, rc := shell("bash", ["-lc", "cat \""+path+"\""])
+    if rc!=0 then
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "snapshot-restore",
+        outcome: "error",
+        reason: "snapshot not found",
+        details: {"snapshotId": snapId}
+      })
+      return false
+    end if
+    snap := json.decodeSnapshot(content)
+    # Hard reset to saved commit
+    _, rc2 := git(state, ["reset","--hard", snap.headCommit])
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: snap.branch,
+      action: "snapshot-restore",
+      outcome: if rc2==0 then "ok" else "error" end,
+      reason: "restore to "+snap.headCommit,
+      details: {"snapshotId": snapId}
+    })
+    return (rc2==0)
+  endfunction
+
+  # ========== GUARDS ==========
+
+  function isSafeBranch(branch string) bool
+    for b in SAFE_BRANCHES
+      if b==branch then return true end if
+    endfor
+    return false
+  endfunction
+
+  function isWorkBranch(branch string) bool
+    for p in WORK_BRANCH_PREFIXES
+      if startsWith(branch, p) then return true end if
+    endfor
+    return false
+  endfunction
+
+  function guardRebase(state *GitState, mode string) bool
+    if not REBASE_ALLOWED then
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "rebase-"+mode,
+        outcome: "blocked",
+        reason: "rebase globally disabled",
+        details: {}
+      })
+      return false
+    end if
+
+    if isSafeBranch(state.branch) then
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "rebase-"+mode,
+        outcome: "blocked",
+        reason: "protected branch",
+        details: {}
+      })
+      return false
+    end if
+
+    if state.dirty then
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "rebase-"+mode,
+        outcome: "blocked",
+        reason: "dirty working tree",
+        details: {}
+      })
+      return false
+    end if
+
+    if AUTO_SNAPSHOT_ON_REBASE then
+      createSnapshot(state, "pre-rebase-"+mode, {})
+    end if
+    return true
+  endfunction
+
+  function guardMerge(state *GitState, target string) bool
+    if state.dirty then
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "merge",
+        outcome: "blocked",
+        reason: "dirty working tree",
+        details: {}
+      })
+      return false
+    end if
+    if AUTO_SNAPSHOT_ON_MERGE then
+      createSnapshot(state, "pre-merge", {"target":target})
+    end if
+    return true
+  endfunction
+
+  function guardPush(state *GitState, args []string) bool
+    # Hard-block force pushes
+    for a in args
+      if a=="--force" or a=="-f" or a=="--force-with-lease" then
+        if not FORCE_PUSH_ALLOWED then
+          logAudit(AuditEntry{
+            timestampUtc: nowUtc(),
+            repoRoot: state.repoRoot,
+            branch: state.branch,
+            action: "push",
+            outcome: "blocked",
+            reason: "force push disabled",
+            details: {"args": join(args," ")}
+          })
+          return false
+        end if
+      end if
+    endfor
+
+    if AUTO_SNAPSHOT_ON_COMMIT then
+      createSnapshot(state, "pre-push", {"args":join(args," ")})
+    end if
+
+    return true
+  endfunction
+
+  function guardPull(state *GitState) bool
+    if AUTO_STASH_ON_PULL and state.dirty then
+      _, _ := git(state, ["stash","push","-u","-m","GitGuardianAutoStash"])
+    end if
+    createSnapshot(state, "pre-pull", {})
+    return true
+  endfunction
+
+  # ========== SAFE COMMAND LAYER ==========
+
+  command safe-status
+    state := refreshState()
+    print "Repo: "+state.repoRoot
+    print "Branch: "+state.branch
+    print "Ahead: "+state.ahead+" Behind: "+state.behind+" Dirty: "+(if state.dirty then "yes" else "no" end)
+    print "RebaseInProgress: "+(if state.rebaseInProgress then "yes" else "no" end)
+    print "MergeInProgress: "+(if state.mergeInProgress then "yes" else "no" end)
+  endcommand
+
+  command safe-commit args...
+    state := refreshState()
+    if not ensureGitConfig(&state) then
+      print "Blocked: configure user.name and user.email first."
+      return
+    end if
+    headBefore, _ := git(&state, ["rev-parse","HEAD"])
+    _, rc := git(&state, ["commit"] + args)
+    headAfter, _ := git(&state, ["rev-parse","HEAD"])
+    if rc==0 and headBefore!=headAfter and AUTO_SNAPSHOT_ON_COMMIT then
+      createSnapshot(&state, "post-commit", {"headAfter":trim(headAfter)})
+    end if
+  endcommand
+
+  command safe-pull args...
+    state := refreshState()
+    if not guardPull(&state) then
+      print "Pull blocked."
+      return
+    end if
+    _, rc := git(&state, ["pull"]+args)
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "pull",
+      outcome: if rc==0 then "ok" else "error" end,
+      reason: "safe-pull",
+      details: {"args":join(args," ")}
+    })
+  endcommand
+
+  command safe-push args...
+    state := refreshState()
+    if not ensureGitConfig(&state) then
+      print "Blocked: missing git config."
+      return
+    end if
+    if not guardPush(&state, args) then
+      print "Push blocked by policy."
+      return
+    end if
+    _, rc := git(&state, ["push"]+args)
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "push",
+      outcome: if rc==0 then "ok" else "error" end,
+      reason: "safe-push",
+      details: {"args":join(args," ")}
+    })
+    if rc!=0 then
+      print "Push failed. Use `aln git-guardian safe-push-diagnose` for details."
+    end if
+  endcommand
+
+  command safe-push-diagnose
+    state := refreshState()
+    print "=== GitSessionGuardian Diagnosis ==="
+    print "Branch: "+state.branch
+    print "Tracking: "+state.tracking
+    print "Ahead: "+state.ahead+" Behind: "+state.behind
+    if state.rebaseInProgress then
+      print "Rebase is in progress. Use `safe-rebase-continue` or `safe-rebase-abort`."
+    end if
+    if state.mergeInProgress then
+      print "Merge is in progress. Resolve conflicts and `git commit` before pushing."
+    end if
+    if state.behind>0 then
+      print "Branch behind remote; run `safe-pull --rebase` (if allowed) or `safe-pull`."
+    end if
+  endcommand
+
+  command safe-rebase-onto baseRef
+    state := refreshState()
+    if not guardRebase(&state, "interactive") then
+      print "Rebase blocked by policy."
+      return
+    end if
+    _, rc := git(&state, ["rebase", baseRef])
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "rebase-onto",
+      outcome: if rc==0 then "ok" else "error" end,
+      reason: "user-requested",
+      details: {"baseRef":baseRef}
+    })
+  endcommand
+
+  command safe-rebase-continue
+    state := refreshState()
+    if not state.rebaseInProgress then
+      print "No rebase in progress."
+      return
+    end if
+    _, rc := git(&state, ["rebase","--continue"])
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "rebase-continue",
+      outcome: if rc==0 then "ok" else "error" end,
+      reason: "interactive-continue",
+      details: {}
+    })
+  endcommand
+
+  command safe-rebase-abort
+    state := refreshState()
+    if not state.rebaseInProgress then
+      print "No rebase in progress."
+      return
+    end if
+    _, rc := git(&state, ["rebase","--abort"])
+    logAudit(AuditEntry{
+      timestampUtc: nowUtc(),
+      repoRoot: state.repoRoot,
+      branch: state.branch,
+      action: "rebase-abort",
+      outcome: if rc==0 then "ok" else "error" end,
+      reason: "user-abort",
+      details: {}
+    })
+  endcommand
+
+  command snapshot-restore snapshotId
+    state := refreshState()
+    ok := restoreSnapshot(&state, snapshotId)
+    if ok then
+      print "Restored snapshot "+snapshotId
+    else
+      print "Failed to restore snapshot "+snapshotId
+    end if
+  endcommand
+
+  command snapshots-list
+    state := refreshState()
+    shell("bash", ["-lc", "cd \""+state.repoRoot+"\" && ls -1 \""+SNAPSHOT_DIR+"\""])
+  endcommand
+
+  # ========== VSCODE INTEGRATION SHIM ==========
+
+  command vscode-hook action args...
+    # This is the hook VS Code will call instead of raw git.
+    # Map GUI actions to safe-* commands.
+    if action=="push" then
+      safe-push args...
+    elseif action=="pull" then
+      safe-pull args...
+    elseif action=="commit" then
+      safe-commit args...
+    elseif action=="rebase-onto" then
+      safe-rebase-onto args[0]
+    elseif action=="rebase-continue" then
+      safe-rebase-continue
+    elseif action=="rebase-abort" then
+      safe-rebase-abort
+    else
+      # Fallback: pass-through to git but still audit.
+      state := refreshState()
+      _, rc := git(&state, args)
+      logAudit(AuditEntry{
+        timestampUtc: nowUtc(),
+        repoRoot: state.repoRoot,
+        branch: state.branch,
+        action: "raw-git-"+action,
+        outcome: if rc==0 then "ok" else "error" end,
+        reason: "fallback",
+        details: {"args":join(args," ")}
+      })
+    end if
+  endcommand
+
+endprogram

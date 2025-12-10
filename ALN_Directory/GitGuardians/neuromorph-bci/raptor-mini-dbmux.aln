@@ -1,0 +1,304 @@
+aln PROGRAM RaptorMiniDBMuxV2
+  meta:
+    id          "RAPTOR-MINI-DBMUX-002"
+    owner       "Doctor Jacob Scott Farmer"
+    scope       "GitSessionGuardian + VSCode + CI + engine tooling"
+    description "Deterministic, audited database + config writer for Git Guardian, VS Code extension, and CI wiring."
+    engines     ["UnrealEngine5","Unity6000","Godot4"]
+  endmeta
+
+  env:
+    ROOT_DIR          "c:/Directory-bci"        # adjust per host
+    DB_DIR            "c:/Directory-bci/.guardian-db"
+    DB_FILE           "c:/Directory-bci/.guardian-db/state.json"
+    LOG_FILE          "c:/Directory-bci/.guardian-db/raptor-mini.log"
+    PROJECTS          ["youworld-core","au-platform","city-stack"]
+  endenv
+
+  objects:
+    GuardianProject struct:
+      id        string
+      name      string
+      path      string
+      engine    string   # "unreal","unity","godot"
+      repoUrl   string
+      enabled   bool
+    endstruct
+
+    GuardianState struct:
+      version        string
+      lastUpdatedUtc string
+      projects       []GuardianProject
+      gitGuardianCfg map[string]string
+      ciPipelines    map[string]string
+    endstruct
+  endobjects
+
+  function nowUtc() string
+    # RFC3339 UTC timestamp
+  endfunction
+
+  function shell(cmd string, args []string, cwd string) (string,int)
+    # cross-platform spawn with cwd, returns stdout, exitCode
+  endfunction
+
+  function ensureDir(path string)
+    shell("bash", ["-lc","mkdir -p \""+path+"\""], ROOT_DIR)
+  endfunction
+
+  function fileExists(path string) bool
+    _, rc := shell("bash", ["-lc","test -f \""+path+"\""], ROOT_DIR)
+    return rc==0
+  endfunction
+
+  function writeFile(path string, content string) bool
+    ensureDir(dirname(path))
+    _, rc := shell("bash", ["-lc","cat > \""+path+"\" << 'EOF'\n"+content+"\nEOF"], ROOT_DIR)
+    return rc==0
+  endfunction
+
+  function readFile(path string) string
+    out, _ := shell("bash", ["-lc","cat \""+path+"\""], ROOT_DIR)
+    return out
+  endfunction
+
+  function logLine(msg string)
+    ensureDir(DB_DIR)
+    shell("bash", ["-lc","echo \""+nowUtc()+" | "+msg+"\" >> \""+LOG_FILE+"\""], ROOT_DIR)
+  endfunction
+
+  # ---------- STATE DB ----------
+
+  function defaultGuardianState() GuardianState
+    p1 := GuardianProject{
+      id: "youworld-core",
+      name: "YouWorld Core",
+      path: ROOT_DIR+"/YouWorld",
+      engine: "unreal",
+      repoUrl: "git@github.com:Doctor0Evil/YouWorld.git",
+      enabled: true,
+    }
+    p2 := GuardianProject{
+      id: "au-platform",
+      name: "Augmented User Platform",
+      path: ROOT_DIR+"/Augmented-User-Platform",
+      engine: "unity",
+      repoUrl: "git@github.com:Doctor0Nano/Augmented-User-Platform.git",
+      enabled: true,
+    }
+    p3 := GuardianProject{
+      id: "city-stack",
+      name: "Smart City Stack",
+      path: ROOT_DIR+"/SmartCityStack",
+      engine: "godot",
+      repoUrl: "git@github.com:Doctor0Evil/SmartCityStack.git",
+      enabled: true,
+    }
+
+    cfg := map[string]string{
+      "binary":          "aln",
+      "entry_command":   "GitSessionGuardianV1 vscode-hook",
+      "override_git":    "true",
+      "intercept":       "push,pull,commit,checkout,rebase-onto,rebase-continue,rebase-abort",
+      "block_force":     "true",
+      "block_rebase_pb": "true",
+      "snap_pre_pull":   "true",
+      "snap_pre_push":   "true",
+      "snap_pre_rebase": "true",
+      "snap_pre_merge":  "true",
+      "audit_log":       ".git/git-guardian-audit.jsonl",
+      "snapshot_dir":    ".git/git-guardian-snapshots",
+    }
+
+    pipelines := map[string]string{
+      "unreal-main": "ci/unreal-main-git-guardian.yaml",
+      "unity-main":  "ci/unity-main-git-guardian.yaml",
+      "godot-main":  "ci/godot-main-git-guardian.yaml",
+    }
+
+    return GuardianState{
+      version: "2.0.0",
+      lastUpdatedUtc: nowUtc(),
+      projects: [p1,p2,p3],
+      gitGuardianCfg: cfg,
+      ciPipelines: pipelines,
+    }
+  endfunction
+
+  function loadState() GuardianState
+    ensureDir(DB_DIR)
+    if not fileExists(DB_FILE) then
+      st := defaultGuardianState()
+      saveState(st)
+      return st
+    end if
+    raw := readFile(DB_FILE)
+    st := json.decodeGuardianState(raw)
+    return st
+  endfunction
+
+  function saveState(state GuardianState)
+    state.lastUpdatedUtc = nowUtc()
+    data := json.encode(state)
+    writeFile(DB_FILE, data)
+    logLine("STATE_SAVE version="+state.version)
+  endfunction
+
+  # ---------- CODEGEN TEMPLATES ----------
+
+  function renderGitGuardianCfg(cfg map[string]string) string
+    return "properties\n"+
+      "git-guardian.aln.command="+cfg["binary"]+" "+cfg["entry_command"]+"\n"+
+      "git.commands="+cfg["override_git"]+"\n"+
+      "intercept="+cfg["intercept"]+"\n"+
+      "force.push.block="+cfg["block_force"]+"\n"+
+      "rebase.protected.block="+cfg["block_rebase_pb"]+"\n"+
+      "snapshots.pre.pull="+cfg["snap_pre_pull"]+"\n"+
+      "snapshots.pre.push="+cfg["snap_pre_push"]+"\n"+
+      "snapshots.pre.rebase="+cfg["snap_pre_rebase"]+"\n"+
+      "snapshots.pre.merge="+cfg["snap_pre_merge"]+"\n"+
+      "log.path="+cfg["audit_log"]+"\n"+
+      "snapshots.dir="+cfg["snapshot_dir"]+"\n"
+  endfunction
+
+  function renderVSCodeSettings() string
+    return "{\n"+
+      "  \"git.enabled\": true,\n"+
+      "  \"github.gitAuthentication\": true\n"+
+      "}\n"
+  endfunction
+
+  function renderVSCodeTasks() string
+    return "{\n"+
+      "  \"version\": \"2.0.0\",\n"+
+      "  \"tasks\": [\n"+
+      "    {\n"+
+      "      \"label\": \"Git Guardian: Safe Push\",\n"+
+      "      \"type\": \"shell\",\n"+
+      "      \"command\": \"aln\",\n"+
+      "      \"args\": [\"GitSessionGuardianV1\",\"vscode-hook\",\"git\",\"push\"],\n"+
+      "      \"options\": { \"cwd\": \"${workspaceFolder}\" }\n"+
+      "    },\n"+
+      "    {\n"+
+      "      \"label\": \"Git Guardian: Safe Pull\",\n"+
+      "      \"type\": \"shell\",\n"+
+      "      \"command\": \"aln\",\n"+
+      "      \"args\": [\"GitSessionGuardianV1\",\"vscode-hook\",\"git\",\"pull\"],\n"+
+      "      \"options\": { \"cwd\": \"${workspaceFolder}\" }\n"+
+      "    },\n"+
+      "    {\n"+
+      "      \"label\": \"Git Guardian: Safe Commit\",\n"+
+      "      \"type\": \"shell\",\n"+
+      "      \"command\": \"aln\",\n"+
+      "      \"args\": [\"GitSessionGuardianV1\",\"vscode-hook\",\"git\",\"commit\"],\n"+
+      "      \"options\": { \"cwd\": \"${workspaceFolder}\" }\n"+
+      "    },\n"+
+      "    {\n"+
+      "      \"label\": \"Git Guardian: Safe Checkout main\",\n"+
+      "      \"type\": \"shell\",\n"+
+      "      \"command\": \"aln\",\n"+
+      "      \"args\": [\"GitSessionGuardianV1\",\"vscode-hook\",\"git\",\"checkout\",\"main\"],\n"+
+      "      \"options\": { \"cwd\": \"${workspaceFolder}\" }\n"+
+      "    }\n"+
+      "  ]\n"+
+      "}\n"
+  endfunction
+
+  function renderALNShim() string
+    return "#!/usr/bin/env bash\n"+
+      "set -euo pipefail\n"+
+      "CMD=\"${1:-}\"; shift || true\n"+
+      "case \"$CMD\" in\n"+
+      "  GitSessionGuardianV1)\n"+
+      "    # Delegate to compiled ALN runtime for GitSessionGuardianV1\n"+
+      "    exec /usr/local/bin/aln-runtime GitSessionGuardianV1 \"$@\"\n"+
+      "    ;;\n"+
+      "  RaptorMiniDBMuxV2)\n"+
+      "    exec /usr/local/bin/aln-runtime RaptorMiniDBMuxV2 \"$@\"\n"+
+      "    ;;\n"+
+      "  *)\n"+
+      "    echo \"Unknown ALN program: $CMD\" >&2\n"+
+      "    exit 1\n"+
+      "    ;;\n"+
+      "esac\n"
+  endfunction
+
+  function renderCIPipeline(engine string, projectId string) string
+    if engine=="unreal" then
+      return "name: Unreal Git Guardian\n"+
+        "on:\n  push:\n    branches: [ main ]\n"+
+        "jobs:\n  guard:\n    runs-on: ubuntu-latest\n    steps:\n"+
+        "      - uses: actions/checkout@v4\n"+
+        "      - name: Safe push audit\n"+
+        "        run: |\n"+
+        "          aln GitSessionGuardianV1 safe-push\n"
+    elseif engine=="unity" then
+      return "name: Unity Git Guardian\n"+
+        "on:\n  push:\n    branches: [ main ]\n"+
+        "jobs:\n  guard:\n    runs-on: ubuntu-latest\n    steps:\n"+
+        "      - uses: actions/checkout@v4\n"+
+        "      - name: Safe push audit\n"+
+        "        run: |\n"+
+        "          aln GitSessionGuardianV1 safe-push\n"
+    else
+      return "name: Godot Git Guardian\n"+
+        "on:\n  push:\n    branches: [ main ]\n"+
+        "jobs:\n  guard:\n    runs-on: ubuntu-latest\n    steps:\n"+
+        "      - uses: actions/checkout@v4\n"+
+        "      - name: Safe push audit\n"+
+        "        run: |\n"+
+        "          aln GitSessionGuardianV1 safe-push\n"
+    end if
+  endfunction
+
+  # ---------- ACTIONS / WORKFLOW ----------
+
+  command init-db
+    st := defaultGuardianState()
+    saveState(st)
+    logLine("INIT_DB ok")
+    print "RaptorMini DB initialized at "+DB_FILE
+  endcommand
+
+  command sync-projects
+    st := loadState()
+    for _, p in range st.projects
+      if not p.enabled then continue end if
+      base := p.path
+      # Git Guardian config per project
+      cfgPath := base+"/ALN_Directory/GitGuardians/neuromorph-bci/git-guardian.cfg"
+      writeFile(cfgPath, renderGitGuardianCfg(st.gitGuardianCfg))
+
+      # VSCode support
+      writeFile(base+"/.vscode/settings.json", renderVSCodeSettings())
+      writeFile(base+"/.vscode/tasks.json",    renderVSCodeTasks())
+
+      # CI pipeline
+      key := p.engine+"-main"
+      yamlPath := base+"/"+st.ciPipelines[key]
+      writeFile(yamlPath, renderCIPipeline(p.engine, p.id))
+
+      logLine("SYNC_PROJECT "+p.id+" path="+base)
+    endfor
+    print "RaptorMini sync complete for "+len(st.projects).toString()+" projects."
+  endcommand
+
+  command install-shim
+    writeFile(ROOT_DIR+"/scripts/aln.sh", renderALNShim())
+    shell("bash", ["-lc","chmod +x \""+ROOT_DIR+"/scripts/aln.sh\""], ROOT_DIR)
+    logLine("INSTALL_SHIM scripts/aln.sh")
+    print "ALN shim installed."
+  endcommand
+
+  command status
+    st := loadState()
+    print "RaptorMini DB version: "+st.version
+    print "Last updated: "+st.lastUpdatedUtc
+    for _, p in range st.projects
+      print "- "+p.id+" ["+p.engine+"] enabled="+(if p.enabled then "true" else "false" end)
+    endfor
+    print "DB file: "+DB_FILE
+    print "Log: "+LOG_FILE
+  endcommand
+
+endprogram

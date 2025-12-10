@@ -1,0 +1,5 @@
+{
+  "allow_firewall_apply": false,
+  "os": ["Windows_NT", "Linux"],
+  "lastAppliedHash": null
+}

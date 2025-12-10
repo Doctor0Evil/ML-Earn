@@ -1,0 +1,245 @@
+# filename: Github-Copilot-Next-Steps-And-ALN-Interop.aln
+# destination-folder: /aln/github_copilot/
+
+aln_document {
+  header {
+    aln_version: "1.0";
+    qpu_math_profile: "QPU.Math+";
+    title: "Copilot Next Steps: Validation, Context, Security, and Feedback";
+    context_sources: "Ajv CLI validation docs; Ajv GitHub Action; VS Code Copilot Chat invocation and customization; GitHub Actions conditional failure patterns.";
+  }
+
+  ###################################################################
+  # 0) New governance terms for this phase
+  ###################################################################
+  section "nanoterm_definitions" {
+    text
+    text_block: """
+ajv_mesh_sweep:
+  definition: "A repository-wide Ajv CLI pass that validates every JSON artifact, not only ALN-derived files, to prevent corrupt config from entering Copilot or CI paths.";
+  purpose: "Extends ALN schema checks to cover generic JSON files using glob patterns in GitHub Actions steps.";
+
+copilot_aln_metaprompt_lane:
+  definition: "A VS Code command path that collects ALN repo metadata and streams it into Copilot Chat as a compact, high-signal system prompt.";
+  purpose: "Aligns every new chat with the repository's ALN rules, schemas, and edit plans without manual prompt crafting.";
+
+aln_severity_gate:
+  definition: "A CI rule that fails jobs only when ALN security scanner findings reach a configured severity threshold.";
+  purpose: "Prevents high and critical issues from merging while allowing informational or low-severity noise to be triaged asynchronously.";
+
+copilot_three_file_logplane:
+  definition: "A three-file Copilot edit plan focused on logging and telemetry changes that keeps public contracts and security invariants intact.";
+  purpose: "Gives Copilot a bounded, explicit surface for observability refactors.";
+
+copilot_qos_signal_track:
+  definition: "A feedback workflow that logs suggestion acceptance and post-merge test failures over time to drive ALN prompt and workflow tuning.";
+  purpose: "Connects Copilot usage patterns to CI quality signals for continuous improvement.";
+    """;
+  }
+
+  ###################################################################
+  # 1) Ajv step: validate ALL JSON in workflow
+  ###################################################################
+  section "validate_all_json_step" {
+    description: "Extend the existing validate-aln workflow with a final Ajv sweep over all JSON files via glob patterns.";
+
+    text
+    text_block: """
+validate_aln_workflow_extension:
+  file: ".github/workflows/validate-aln.yml"
+  patch: |
+    jobs:
+      validate-aln-json:
+        runs-on: ubuntu-latest
+        steps:
+          # ... existing checkout, Node setup, ajv-cli install, and ALN JSON validation steps ...
+
+          - name: Ajv mesh sweep for all JSON
+            run: |
+              npx ajv validate \
+                -s schemas/default_fallback.schema.json \
+                -d "aln/json/**/*.json" \
+                -d "config/**/*.json" \
+                -d "src/**/*.json" || exit 1
+
+ajv_mesh_sweep_binding:
+  note: "Use a minimal default_fallback.schema.json (e.g., type and structural checks) so obviously malformed JSON cannot reach Copilot or CI workflows.";
+    """;
+  }
+
+  ###################################################################
+  # 2) VS Code command: load ALN repo metadata into Copilot Chat
+  ###################################################################
+  section "vscode_aln_metadata_command" {
+    description: "Command that synthesizes ALN repo metadata into a Copilot Chat metaprompt.";
+
+    text
+    text_block: """
+package_json_addition:
+  file: "vscode-extension/package.json"
+  snippet: |
+    {
+      "contributes": {
+        "commands": [
+          {
+            "command": "aln.loadRepoMetadataIntoChat",
+            "title": "ALN: Load Repo Metadata into Copilot Chat"
+          }
+        ],
+        "menus": {
+          "commandPalette": [
+            { "command": "aln.loadRepoMetadataIntoChat", "when": "true" }
+          ]
+        }
+      }
+    }
+
+command_behavior:
+  - "Scan aln/github_copilot for core ALN files (schemas, edit plans, security rule sets, feedback profiles)."
+  - "Build a short metaprompt string that includes: repo_id, primary_languages, key ALN plan_ids, active copilot_security_rule_set names, and testing expectations."
+  - "Invoke VS Code's chat open action with this metaprompt as the initial query, targeting Copilot Chat."
+  - "Example call pattern (pseudocode, ALN-level): vscode.commands.executeCommand('workbench.action.chat.open', metaprompt)."
+
+copilot_aln_metaprompt_lane:
+  binding: "This command standardizes how engineers and Copilot enter governed sessions for this repo, ensuring ALN constraints are always visible at chat start.";
+    """;
+  }
+
+  ###################################################################
+  # 3) CI: fail job when ALN security scanner reports high severity
+  ###################################################################
+  section "aln_severity_gate_workflow" {
+    description: "Extend the ALN security scan job to parse severities and fail only when high/critical findings are present.";
+
+    text
+    text_block: """
+aln_security_scan_extension:
+  file: ".github/workflows/aln-security-scan.yml"
+  patch: |
+    jobs:
+      aln-security-scan:
+        runs-on: ubuntu-latest
+        steps:
+          # ... existing checkout, Node setup, and scanner run ...
+
+          - name: Evaluate ALN security severity
+            id: eval_severity
+            run: |
+              # Expect JSON shape: { "findings": [ { "severity": "high" | "medium" | "low" | "info", ... } ] }
+              if [ ! -f "./aln/security/aln-security-violations.json" ]; then
+                echo "no_findings=true" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+
+              SEV_COUNT=$(jq '[.findings[] | select(.severity == "high" or .severity == "critical")] | length' ./aln/security/aln-security-violations.json)
+              echo "high_or_critical_count=$SEV_COUNT" >> $GITHUB_OUTPUT
+
+              if [ "$SEV_COUNT" -gt 0 ]; then
+                echo "High/critical ALN security issues detected."
+                exit 1
+              fi
+
+aln_severity_gate:
+  note: "This pattern uses jq to count high/critical findings and fails the step, causing the job and workflow run to fail when the threshold is exceeded.";
+    """;
+  }
+
+  ###################################################################
+  # 4) Draft copilot_three_file_edit_plan for logging + telemetry
+  ###################################################################
+  section "copilot_three_file_logplane_draft" {
+    description: "Draft ALN plan that shapes Copilot's three-file refactor behavior for observability.";
+
+    text
+    text_block: """
+copilot_three_file_edit_plan "logging_and_telemetry_changes" {
+  plan_id: "LOG-TELEM-DRAFT-01";
+  intent: "Introduce structured logging and telemetry for a critical request path while preserving public APIs and avoiding sensitive data exposure.";
+  files_in_scope: [
+    "src/http/requests/checkoutHandler.ts",
+    "src/logging/requestLogger.ts",
+    "src/telemetry/httpMetricsClient.ts"
+  ];
+  step_sequence: [
+    "Extend requestLogger.ts to support structured logging with fields: route, userId, requestId, statusCode, durationMs.",
+    "Refactor checkoutHandler.ts to emit structured logs at request start and completion, without including raw payment details.",
+    "Integrate httpMetricsClient.ts to record latency and error-rate metrics for checkoutHandler with stable metric names."
+  ];
+  invariants: [
+    "No raw card numbers, CVVs, API keys, or token values appear in logs or metrics labels.",
+    "Existing HTTP response shapes and status codes remain unchanged.",
+    "Existing checkout tests pass; new tests cover logging and telemetry behavior."
+  ];
+  test_update_requirements: [
+    "Add unit tests for checkoutHandler.ts that assert requestLogger is called with sanitized fields.",
+    "Add tests to confirm httpMetricsClient records counters and timers for success and error paths."
+  ];
+  security_rule_set_ref: "default-web-service";
+} -> returns {
+  ordered_edits: list<string>;
+  tests_to_create_or_update: list<string>;
+  expected_security_violations_resolved: list<string>;
+}
+
+copilot_three_file_logplane:
+  binding: "Reference LOG-TELEM-DRAFT-01 in Copilot coding agent chats and PR descriptions so edits remain within this bounded observability surface.";
+    """;
+  }
+
+  ###################################################################
+  # 5) Feedback workflow: suggestion acceptance + test failures
+  ###################################################################
+  section "copilot_qos_signal_track_workflow" {
+    description: "Workflow that records suggestion acceptance indicators and test failures, then writes an ALN feedback profile stub.";
+
+    text
+    text_block: """
+copilot_feedback_workflow:
+  file: ".github/workflows/copilot-qos-feedback.yml"
+  content: |
+    name: "Copilot QoS Signal Track"
+
+    on:
+      schedule:
+        - cron: "0 4 * * 1"
+      workflow_dispatch: {}
+
+    jobs:
+      collect-qos-signals:
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Set up Node
+            uses: actions/setup-node@v4
+            with:
+              node-version: "22"
+
+          - name: Aggregate test failures
+            run: |
+              # Custom script to query recent workflow runs and summarize failures by workflow and test suite.
+              node tools/aln-aggregate-test-failures.cjs \
+                --window last_30_days \
+                --output ./aln/metrics/test-failures.json
+
+          - name: Aggregate Copilot suggestion signals
+            run: |
+              # If you log Copilot-assisted commits/PRs via labels or metadata, aggregate their counts and revert rates here.
+              node tools/aln-aggregate-copilot-signals.cjs \
+                --window last_30_days \
+                --output ./aln/metrics/copilot-signals.json
+
+          - name: Generate copilot_feedback_profile ALN
+            run: |
+              node tools/aln-generate-feedback-profile.cjs \
+                --tests ./aln/metrics/test-failures.json \
+                --signals ./aln/metrics/copilot-signals.json \
+                --output ./aln/github_copilot/copilot_feedback_profile.aln
+
+copilot_qos_signal_track:
+  binding: "The generated copilot_feedback_profile captures suggestion_acceptance proxies and post-merge failure patterns, feeding back into ALN prompts, Spaces defaults, and CI rules for the next iteration.";
+    """;
+  }
+}

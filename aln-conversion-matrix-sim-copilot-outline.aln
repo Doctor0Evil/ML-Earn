@@ -1,0 +1,905 @@
+aln_bundle "aln_conversion_matrix_sim_copilot_outline_v1" {
+meta {
+author: "Perplexity-ALN-Synthesizer";
+created_utc: "2025-11-27T18:25:00Z";
+reference_ajv_getting_started: "[https://ajv.js.org/guide/getting-started.html";[1](https://ajv.js.org/guide/getting-started.html%22;%5B1)]
+reference_ajv_required_properties: "[https://ajv.js.org/json-schema.html";[2](https://ajv.js.org/json-schema.html%22;%5B2)]
+reference_matrix_strategy: "[https://runs-on.com/github-actions/the-matrix-strategy/";[3](https://runs-on.com/github-actions/the-matrix-strategy/%22;%5B3)]
+reference_copilot_auto_review: "[https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review";[4](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review%22;%5B4)]
+}
+// New term: aln-parse-lattice
+//
+// Definition:
+// "aln-parse-lattice" is the structured intermediate representation
+// produced when parsing .aln documents before projecting them to JSON.
+// It preserves ordering, scopes, and references so that the final
+// aln-json-projection remains stable and Ajv-friendly.
+//
+// Safety:
+// Only validated aln-parse-lattice states may be emitted as JSON.
+term "aln-parse-lattice" {
+category: "parse_ir";
+invariants: [
+"no_orphan_sections",
+"no_undefined_terms",
+"stable_ids_for_sections"
+];
+}
+// ------------------------------------------------------------------
+// 1) Conversion script outline for .aln -> JSON, with examples
+// ------------------------------------------------------------------
+section "aln_to_json_conversion_script_outline" {
+text
+text_block: """
+script_outline "aln_to_json_projection_cjs" {
+filename: "scripts/aln-to-json-projection.cjs";
+purpose: "Parse .aln files into aln-parse-lattice and emit aln-json-projection JSON views for Ajv validation.";
+phases: [
+{
+name: "discover_input_files";
+description: "Globs aln//*.aln and builds a file list.";
+io: {
+input: "aln//.aln";
+output: "in-memory file list";
+};
+},
+{
+name: "parse_to_lattice";
+description: "Tokenize and parse each .aln into an aln-parse-lattice tree.";
+io: {
+input: ".aln text";
+output: "aln-parse-lattice object";
+};
+},
+{
+name: "project_to_json";
+description: "Serialize lattice into deterministic aln-json-projection.";
+io: {
+input: "aln-parse-lattice";
+output: "JSON object";
+};
+},
+{
+name: "write_json_files";
+description: "Write JSON outputs into aln-json/ with mirrored names.";
+io: {
+input: "JSON object";
+output: "aln-json/.json";
+};
+}
+];
+minimal_example_input {
+file: "aln/example.aln";
+content: "aln_bundle \"demo\" { section \"s1\" { text text_block: \"demo\" } }";
+}
+minimal_example_output {
+file: "aln-json/example.json";
+json: {
+"projection_meta": {
+"source": "aln/example.aln",
+"profile": "aln-json-projection",
+"version": "1.0.0"
+},
+"aln_bundle": "demo",
+"sections": [
+{
+"id": "s1",
+"kind": "section",
+"payload": {
+"text_block": "demo"
+}
+}
+]
+};
+}
+}
+"""
+}
+// ------------------------------------------------------------------
+// 2) Ajv schema requirements for ALN JSON validation
+// ------------------------------------------------------------------
+section "ajv_schema_requirements_for_aln_json" {
+text
+text_block: """
+ajv_schema_contract "aln_core_and_workflow_validation_v1" {
+// Ajv supports drafts 04/06/07/2019-09/2020-12; use a modern draft.[ajv.js](https://ajv.js.org/guide/getting-started.html)​
+json_schema_version: "[https://json-schema.org/draft/2020-12/schema](https://json-schema.org/draft/2020-12/schema)";
+core_schema "aln-core.schema.json" {
+type: "object";
+required: ["projection_meta", "aln_bundle"]; // enforced via Ajv required keyword.[ajv.js](https://ajv.js.org/json-schema.html)​
+properties: {
+"projection_meta": {
+type: "object";
+required: ["source", "profile"];
+properties: {
+"source": {type: "string"};
+"profile": {type: "string", const: "aln-json-projection"};
+};
+additionalProperties: true;
+};
+"aln_bundle": {type: "string"};
+"sections": {
+type: "array";
+items: {
+type: "object";
+required: ["id", "kind"];
+properties: {
+"id": {type: "string"};
+"kind": {type: "string"};
+"payload": {type: "object"};
+};
+additionalProperties: false;
+};
+};
+additionalProperties: false;
+}
+workflow_schema "aln-workflow-skeleton.schema.json" {
+type: "object";
+required: ["workflow_skeletons"];
+properties: {
+"workflow_skeletons": {
+type: "array";
+items: {
+type: "object";
+required: ["filename", "yaml_jobs"];
+properties: {
+"filename": {type: "string"};
+"yaml_jobs": {
+type: "array";
+items: {
+type: "object";
+required: ["job_id", "runs_on"];
+properties: {
+"job_id": {type: "string"};
+"runs_on": {type: "string"};
+"env": {type: "object"};
+"steps": {type: "array"};
+};
+};
+};
+};
+};
+};
+additionalProperties: false;
+}
+governance_schema "aln-governance-block.schema.json" {
+type: "object";
+required: ["aln_governance_block"];
+additionalProperties: true;
+}
+copilot_schema "aln-copilot-metaprompt.schema.json" {
+type: "object";
+required: ["commands"];
+properties: {
+"commands": {
+type: "array";
+items: {
+type: "object";
+required: ["id", "description"];
+properties: {
+"id": {type: "string"};
+"description": {type: "string"};
+};
+};
+};
+};
+additionalProperties: false;
+}
+}
+"""
+}
+// ------------------------------------------------------------------
+// 3) GitHub Actions matrix for runner types and toolchains
+// ------------------------------------------------------------------
+section "github_actions_matrix_for_runners_and_toolchains" {
+text
+text_block: """
+matrix_design "firmware_twins_runner_toolchain_matrix_v1" {
+target_workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+dimensions {
+os: ["ubuntu-latest", "windows-latest"];
+toolchain: ["gcc", "clang", "rust-stable"];
+}
+// GitHub Actions matrix strategy runs jobs across all combinations.[runs-on](https://runs-on.com/github-actions/the-matrix-strategy/)​
+yaml_matrix_snippet: """
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+""";
+}
+"""
+}
+// ------------------------------------------------------------------
+// 4) Workflow step to invoke Virtual-Hardwire simulator with logs
+// ------------------------------------------------------------------
+section "virtual_hardwire_simulator_step_with_logs" {
+text
+text_block: """
+vh_sim_step_design "aln_vh_sim_ci_step_v1" {
+workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+step_id: "run_virtual_hardware_simulations";
+logging_requirements {
+log_prefix: "[VH-SIM]";
+log_file: "vh-sim-ci.log";
+stdout_and_stderr: true;
+}
+yaml_step_snippet: """
+
+- name: Run virtual hardware simulations
+id: vh-sim
+run: |
+echo "[VH-SIM] starting simulator for backend \${{ env.VH_BACKEND }} and toolchain ${{ env.TOOLCHAIN }}..."
+bin/virtual-hardwire-sim \
+--mode ci-validation \
+--backend "${{ env.VH_BACKEND }}" \
+--fleet vh_twin_fleet_001 \
+--telemetry aln_telemetry_backend_001 \
+2>\&1 | tee vh-sim-ci.log
+echo "[VH-SIM] completed simulation run."
+""";
+}
+"""
+}
+// ------------------------------------------------------------------
+// 5) Copilot metaprompt test cases and automated review rules
+// ------------------------------------------------------------------
+section "copilot_metaprompt_tests_and_review_rules" {
+text
+text_block: """
+copilot_metatest_suite "aln_copilot_metaprompt_tests_v2" {
+metaprompt_source_files: [
+"aln/Github-Copilot-Next-Steps-And-ALN-Interop.aln",
+"aln/aln-advanced-ci-expansion.aln"
+];
+
+test_cases: [
+{
+id: "commands_required";
+description: "Ensure critical CI governance commands exist.";
+assert_present_command_ids: [
+"validate_aln_ci_core",
+"enforce_aln_governance_block",
+"wire_vs_code_aln_support"
+];
+},
+{
+id: "no_policy_weakeners";
+description: "Reject any metaprompt suggesting weaker safety or policy.";
+forbidden_phrases: [
+"allow_python_in_ci",
+"disable_governance_checks",
+"skip_severity_gate",
+"ignore_ajv_errors"
+];
+},
+{
+id: "review_focus";
+description: "Confirm review instructions mention CI, Ajv, and governance.";
+required_terms_any: [
+"Ajv",
+"governance",
+"severity gate",
+"CI workflows"
+];
+}
+];
+
+auto_review_rules {
+branch_ruleset_name: "aln-governance-protected";
+require_copilot_code_review: true; // configured via branch rulesets.[^2_3]
+scope: "pull_requests_touching_aln_or_workflows";
+text
+description: "Any PR that modifies aln/** or .github/workflows/** must trigger Copilot automatic review, ensuring metaprompt tests pass before merge.";
+
+}
+}
+"""
+}
+}
+[https://ajv.js.org/guide/getting-started.html](https://ajv.js.org/guide/getting-started.html)
+[https://ajv.js.org/json-schema.html](https://ajv.js.org/json-schema.html)
+[https://runs-on.com/github-actions/the-matrix-strategy/](https://runs-on.com/github-actions/the-matrix-strategy/)
+[https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review)
+[https://github.com/orgs/community/discussions/160286](https://github.com/orgs/community/discussions/160286)
+[https://stackoverflow.com/questions/48065215/json-schema-extract-the-required-fields](https://stackoverflow.com/questions/48065215/json-schema-extract-the-required-fields)
+[https://stackoverflow.com/questions/72230726/json-schema-which-has-at-least-one-of-any-properties-or-more-with-ajv](https://stackoverflow.com/questions/72230726/json-schema-which-has-at-least-one-of-any-properties-or-more-with-ajv)
+[https://github.com/ajv-validator/ajv/issues/1941](https://github.com/ajv-validator/ajv/issues/1941)
+[https://stackoverflow.com/questions/66025220/paired-values-in-github-actions-matrix](https://stackoverflow.com/questions/66025220/paired-values-in-github-actions-matrix)
+[https://community.postman.com/t/using-ajv-to-validate-json-schema/38309](https://community.postman.com/t/using-ajv-to-validate-json-schema/38309)
+
+aln_bundle "node_tooling_and_matrix_wiring_v2" {
+meta {
+author: "InfraNet-QPU-Datashard-Autogen";
+created_utc: "2025-11-27T18:30:00Z";
+profile: "aln-node-shell+firmware-matrix";
+governance_note: "Non-fiction, production-grade CI tooling for ALN projection, Ajv validation, and virtual hardware twins.";
+}
+
+term "aln-node-shell" {
+category: "tooling_envelope";
+required_scripts: [
+"aln:projection",
+"aln:ajv-mesh",
+"aln:sev-gate"
+];
+guarantees: [
+"no_application_runtime_dependencies",
+"ci_repeatable_without_global_installs",
+"compatible_with_modern_lts_node"
+];
+}
+
+section "qpu_datashard_node_tooling_and_matrix_wiring_v1" {
+text_block: """
+/qpu/datashards/node-tooling-and-matrix-wiring.aln
+path,component,kind,purpose,payload
+"aln/","aln-node-shell","tooling_envelope","Minimal Node.js shell for ALN projection and Ajv validation.","name=aln-ci-tooling;version=0.1.0;license=ISC;profile=aln-node-shell"
+"aln/package.json","package_json","file","Defines Node.js CI tooling scripts and dependencies for ALN workflows.","scripts.aln:projection=node scripts/aln-to-json-projection.cjs;scripts.aln:ajv-mesh=node scripts/aln-ajv-mesh-sweep.cjs;scripts.aln:sev-gate=node scripts/aln-severity-gate.cjs;dependencies.ajv=^8.0.0;dependencies.ajv-formats=^3.0.0"
+"aln/scripts/aln-to-json-projection.cjs","aln_to_json_projection","script","Performs .aln → aln-parse-lattice → aln-json-projection pipeline for Ajv validation.","phases=discover_input_files,parse_to_lattice,project_to_json,write_json_files;input_glob=aln/**/*.aln;output_dir=aln-json/"
+"aln/scripts/aln-ajv-mesh-sweep.cjs","ajv_mesh_sweep","script","Runs Ajv validation across all generated ALN JSON projections.","schema_dir=schemas/aln;data_dir=aln-json;json_schema_draft=https://json-schema.org/draft/2020-12/schema"
+"aln/scripts/aln-severity-gate.cjs","severity_gate","script","Aggregates Ajv results and enforces CI fail on high-severity findings.","severity_threshold=high;exit_on_violation=true;report_path=reports/aln-severity-report.json"
+".github/workflows/aln-ci-firmware-and-twins.yml","firmware_twins_ci_workflow","workflow","Matrix CI workflow for firmware builds and virtual-twin simulations.","job_id=build-firmware-and-simulate;strategy.matrix.os=ubuntu-latest|windows-latest;strategy.matrix.toolchain=gcc|clang|rust-stable;strategy.matrix.sim_backend=vh-cpu|vh-qpu;runs-on=${{ matrix.os}}"
+".github/workflows/aln-ci-firmware-and-twins.yml","firmware_twins_env_injection","workflow_env","Exports ALN and firmware paths plus toolchain and backend to GitHub Actions steps.","env.ALN_DIR=aln;env.FW_DIR=firmware;env.TOOLCHAIN=${{ matrix.toolchain }};env.VH_BACKEND=\${{ matrix.sim_backend }}"
+".github/workflows/aln-ci-firmware-and-twins.yml","firmware_build_step","workflow_step","Matrix-aware firmware compile step spanning CPU toolchains and operating systems.","step_id=build_firmware_non_python;run=Compile firmware for \${{ matrix.toolchain }} on ${{ matrix.os }};toolchains=gcc,clang,rust-stable"
+".github/workflows/aln-ci-firmware-and-twins.yml","virtual_hardwire_sim_step","workflow_step","Executes virtual-twin simulations for each matrix combination with structured logging.","step_id=run_virtual_hardware_simulations;binary=bin/virtual-hardwire-sim;mode=ci-validation;backend=${{ env.VH_BACKEND }};fleet=vh_twin_fleet_001;telemetry=aln_telemetry_backend_001;log_file=vh-sim-ci.log"
+".github/workflows/aln-ci-firmware-and-twins.yml","copilot_auto_review","workflow_governance","Enforces automatic code review on ALN and workflow changes using Copilot agents and Ajv-governance tests.","branch_ruleset=aln-governance-protected;scope=aln/**,.github/workflows/**;require_copilot_code_review=true"
+"""
+}
+
+section "research_actions_for_future_tech_ci_and_twins" {
+text_block: """
+/qpu/datashards/node-tooling-and-matrix-wiring.aln:research
+index,action_id,focus_area,description,math_formula,scientific_fact,legal_terms,geo_evidence
+1,"ra_minimal_node_shell","Node/CI toolchain","Benchmark Node LTS versions (e.g., 18.x, 20.x) for ALN projection time across 1k .aln files in a clean CI container to guarantee deterministic runtimes for smart-city firmware validation.","t_total = n_files × t_file, where n_files is the number of ALN documents and t_file is the measured projection time per file in seconds; measuring t_file by dividing the total projection duration by the number of processed files yields the same result when repeated on identical hardware and Node versions.","Ajv 8 supports JSON Schema draft 2020-12, enabling rigorous structural validation of configuration artifacts used in networked systems.","All CI pipelines MUST pin Node.js major versions and dependency ranges to mitigate supply-chain risk and SHALL implement reproducible builds for safety-critical firmware artifacts.","San Jose (USA); Munich (Germany); Tokyo (Japan); Singapore; Dubai"
+2,"ra_ajv_mesh_for_smart_city","Schema validation mesh","Design an Ajv mesh that validates ALN projections for traffic control, grid telemetry, and public safety APIs, ensuring each service exposes a versioned JSON schema contract stored alongside firmware twins.","n_errors = Σ(i=1→k) e_i, where e_i is the number of schema violations in subsystem i; summing all e_i across k subsystems yields the global validation error budget used by the severity gate.","JSON Schema allows declaring required properties and type constraints, reducing runtime failures in distributed control planes when messages are malformed.","Smart-city operators SHALL maintain version-controlled JSON schemas for all public telemetry and SHALL NOT deploy changes without passing Ajv-based conformance tests in pre-production environments.","Oslo (Norway); Seoul (South Korea); Toronto (Canada); Barcelona (Spain); Sydney (Australia)"
+3,"ra_matrix_toolchains_for_vh","Toolchain matrix","Expand the GitHub Actions matrix to include microcontroller-specific targets (e.g., ARM GCC) and map each combination to virtual-hardware profiles, ensuring every compiled firmware variant is exercised under CI before field deployment.","n_jobs = |OS| × |toolchain| × |sim_backend|, where each cardinality is the count of entries in the matrix dimension; multiplying them yields the total number of CI jobs needed for full coverage.","Matrix strategies in CI make it feasible to test multiple toolchain and runner combinations automatically, improving firmware reliability for heterogeneous hardware fleets.","For regulated environments, continuous integration workflows MUST document tested toolchain versions and SHALL produce auditable logs linking each firmware image to its simulation artifacts.","Austin (USA); Eindhoven (Netherlands); Shenzhen (China); Bangalore (India); Tampere (Finland)"
+4,"ra_virtual_twins_for_network_stacks","Virtual hardware twins","Create virtual-hardware twin profiles that emulate networking stacks (IPv6, QUIC, deterministic industrial protocols) and run them as part of vh-qpu simulations for gaming and smart-city backhaul workloads.","c_latency = (Σ(i=1→m) l_i) / m, where l_i is the measured latency per simulated flow and m is the number of sampled flows; averaging these latencies gives a representative end-to-end delay for the virtual twin network.","Digital twins allow pre-deployment evaluation of control loops and network behavior, reducing the likelihood of catastrophic failures in physical infrastructure.","Operators SHALL ensure that simulated network behaviors approximate field measurements within documented tolerances and MUST disclose known simulation limitations in safety documentation.","London (UK); Chicago (USA); Zurich (Switzerland); Hong Kong (China); Wellington (New Zealand)"
+5,"ra_aln_parse_lattice_ir","ALN parse lattice","Implement a stable aln-parse-lattice intermediate representation with invariants for section IDs and term references, enabling deterministic JSON projection and Ajv validation across CI reruns.","|S_valid| = |S_total| − |S_orphan|, where S_total is the set of all sections and S_orphan is the subset of orphaned sections; enforcing |S_orphan| = 0 keeps the parse lattice invariant of no_orphan_sections satisfied.","Intermediate representations that enforce invariants on structure and references reduce ambiguity when converting between human-authored configuration and machine-validated JSON objects.","Contributors MUST NOT bypass parse-lattice validation and SHALL treat parse errors as blocking issues for merging configuration changes in shared repositories.","Paris (France); Tallinn (Estonia); Vancouver (Canada); Tel Aviv (Israel); Melbourne (Australia)"
+6,"ra_copilot_governance_for_ci","Copilot governance","Configure Copilot automatic reviews plus custom tests that reject any workflow or ALN change weakening Ajv checks, severity gates, or matrix coverage for neuromorphic and gaming infrastructure branches.","r_pass = n_total − n_blocked, where n_total is the number of pull requests touching ALN or workflows and n_blocked is the count that fail governance checks; r_pass indicates governance-compliant merges.","Branch protection rules integrating automated review tools increase consistency of policy enforcement over CI configurations and infrastructure-as-code.","Organizations SHALL declare governance rules in version control and MUST require at least one automated policy check before merging pull requests affecting production CI logic.","Washington D.C. (USA); Brussels (Belgium); Geneva (Switzerland); Singapore; Abu Dhabi (UAE)"
+7,"ra_neuromorphic_ci_hooks","Neuromorphic pipeline hooks","Attach neuromorphic co-processors or simulators as external validation stages that replay real EEG or sensor traces through firmware and virtual-twin stacks before certifying builds for BCI-enabled gaming and smart-city UIs.","e_mean = (Σ(j=1→n) |o_j − ŷ_j|) / n, where o_j is observed signal output and ŷ_j is expected output from the neuromorphic model; this mean absolute error quantifies fidelity of the firmware-neuromorphic integration.","Neuromorphic simulators can execute spiking neural workloads that approximate brain-inspired processing, supporting low-latency, energy-efficient inference for BCI applications.","Any integration of human-derived biosignals into CI test artifacts MUST comply with data protection laws and SHALL de-identify or syntheticize signals where individual re-identification risk exists.","Boston (USA); Vienna (Austria); Kyoto (Japan); Johannesburg (South Africa); Buenos Aires (Argentina)"
+8,"ra_secure_firmware_artifacts","Secure artifacts","Wire TPM-backed signing or detached signatures into the firmware_twins_ci_matrix workflow so that every simulated firmware image is cryptographically signed and verified before deployment into edge clusters.","n_valid = Σ(k=1→p) v_k, where v_k is 1 if artifact k passes signature verification and 0 otherwise; n_valid counts verified artifacts and must equal p for a fully secure release set.","Modern secure-boot chains use cryptographic signatures on firmware images, preventing execution of tampered binaries on production hardware.","Smart-city and gaming infrastructure operators SHALL only deploy firmware images verified against trusted keys and MUST rotate signing keys according to documented key-management policies.","Frankfurt (Germany); Seoul (South Korea); Montreal (Canada); Madrid (Spain); Doha (Qatar)"
+9,"ra_smart_city_telemetry_aln","Telemetry ALN bundles","Standardize ALN bundles describing telemetry schemas for power, mobility, and public safety subsystems and validate them with Ajv meshes before routing data into analytics or agentic-AI layers.","v_rate = n_valid_msgs / n_total_msgs, where n_valid_msgs is the number of telemetry messages passing schema validation and n_total_msgs is the total ingested; maintaining high v_rate indicates schema conformance.","Structured telemetry with validated JSON formats improves downstream aggregation, anomaly detection, and incident response capabilities in urban digital twins.","Data controllers SHALL document telemetry collection purposes and MUST implement schema-level minimization to avoid collecting fields not required for stated objectives.","Copenhagen (Denmark); Dubai (UAE); Seattle (USA); Kuala Lumpur (Malaysia); Porto (Portugal)"
+10,"ra_agentic_ai_routing","Agentic AI routing","Integrate agentic-AI routing logic that consumes ALN-described APIs and matrix-backed simulation outputs to orchestrate upgrades and rollbacks across gaming edges and smart-city nodes using policy-aware decisions.","u_score = w_s·s + w_r·r + w_c·c, where s is simulation success rate, r is rollback risk, c is capacity estimate, and w_s,w_r,w_c are weights summing to 1; u_score prioritizes deployment actions by quantified utility.","Agentic orchestration systems can use policy and telemetry inputs to make autonomous yet auditable decisions about rolling out new configurations to distributed infrastructure.","Operators MUST provide override mechanisms for human intervention and SHALL log agentic decisions, including inputs and chosen actions, to satisfy auditability and accountability requirements.","New York (USA); Shenzhen (China); Helsinki (Finland); Riyadh (Saudi Arabia); Auckland (New Zealand)"
+"""
+}
+
+section "aln_node_shell_minimal_package_json_materialization" {
+text_block: """
+/package.json
+{
+"name": "aln-ci-tooling",
+"version": "0.1.0",
+"description": "Minimal Node shell for ALN projection, Ajv validation, and severity gating in firmware+twin CI.",
+"main": "index.js",
+"license": "ISC",
+"scripts": {
+"aln:projection": "node scripts/aln-to-json-projection.cjs",
+"aln:ajv-mesh": "node scripts/aln-ajv-mesh-sweep.cjs",
+"aln:sev-gate": "node scripts/aln-severity-gate.cjs"
+},
+"dependencies": {
+"ajv": "^8.0.0",
+"ajv-formats": "^3.0.0"
+},
+"devDependencies": {}
+}
+"""
+}
+
+section "github_actions_firmware_twins_matrix_materialization" {
+text_block: """
+/.github/workflows/aln-ci-firmware-and-twins.yml
+name: "ALN Firmware Matrix and Twins CI"
+
+on:
+push:
+paths:
+- "aln/**"
+- "firmware/**"
+- ".github/workflows/aln-ci-firmware-and-twins.yml"
+pull_request:
+paths:
+- "aln/**"
+- "firmware/**"
+- ".github/workflows/aln-ci-firmware-and-twins.yml"
+
+jobs:
+build-firmware-and-simulate:
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+sim_backend: [vh-cpu, vh-qpu]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+VH_BACKEND: \${{ matrix.sim_backend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+    
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+    
+      - name: Install ALN CI tooling
+        run: npm ci
+    
+      - name: Project ALN to JSON
+        run: npm run aln:projection
+    
+      - name: Ajv mesh validation
+        run: npm run aln:ajv-mesh
+    
+      - name: Severity gate
+        run: npm run aln:sev-gate
+    
+      - name: Build firmware
+        id: build_firmware_non_python
+        run: |
+          echo "Compile firmware for ${{ matrix.toolchain }} on ${{ matrix.os }}..."
+          ./tools/build-firmware-${{ matrix.toolchain }}.sh "${FW_DIR}"
+    
+      - name: Run virtual hardware simulations
+        id: run_virtual_hardware_simulations
+        run: |
+          echo "[VH-SIM] starting simulator for backend ${{ env.VH_BACKEND }} and toolchain ${{ env.TOOLCHAIN }}..."
+          bin/virtual-hardwire-sim \
+            --mode ci-validation \
+            --backend "${{ env.VH_BACKEND }}" \
+            --fleet vh_twin_fleet_001 \
+            --telemetry aln_telemetry_backend_001 \
+            2>&1 | tee vh-sim-ci.log
+          echo "[VH-SIM] completed simulation run."
+    """
+}
+
+section "binary_master_answer" {
+text_block: """
+/qpu/datashards/node-tooling-and-matrix-wiring.master.hex
+answer_hex = "7b22616c6e5f6e6f64655f7368656c6c223a2270726f64756374696f6e2d72656164792d63695f6d61747269785f7467696874775f76745f736d61727463697479227d"
+"""
+}
+}
+
+---
+
+aln_bundle "aln_minimal_examples_and_rules_v1" {
+meta {
+author: "Perplexity-ALN-Synthesizer";
+created_utc: "2025-11-27T18:25:30Z";
+reference_ajv_required: "[https://ajv.js.org/json-schema.html";[1](https://ajv.js.org/json-schema.html%22;%5B1)]
+reference_ajv_start: "[https://ajv.js.org/guide/getting-started.html";[2](https://ajv.js.org/guide/getting-started.html%22;%5B2)]
+reference_matrix_strategy: "[https://runs-on.com/github-actions/the-matrix-strategy/";[3](https://runs-on.com/github-actions/the-matrix-strategy/%22;%5B3)]
+reference_upload_artifact: "[https://github.com/actions/upload-artifact";[4](https://github.com/actions/upload-artifact%22;%5B4)]
+}
+// New term: aln-mincase
+//
+// Definition:
+// "aln-mincase" is a deliberately minimal ALN document used as a
+// canonical round-trip test for parsers, projections, and Ajv
+// schemas. It must exercise bundle, section, and text structures
+// while remaining small enough for quick CI checks.
+term "aln-mincase" {
+category: "test_fixture";
+required_elements: ["aln_bundle", "section", "text_block"];
+}
+// ---------------------------------------------------------------
+// 1) Minimal .aln input example and expected JSON output
+// ---------------------------------------------------------------
+section "minimal_aln_and_json_projection" {
+text
+text_block: """
+aln-mincase "demo_minimal" {
+source_file: "aln/demo-minimal.aln";
+aln_input_example: """
+aln_bundle "demo_minimal_bundle" {
+section "demo_section" {
+text
+text_block: "demo payload"
+}
+}
+""";
+expected_json_projection: {
+"projection_meta": {
+"source": "aln/demo-minimal.aln",
+"profile": "aln-json-projection",
+"version": "1.0.0"
+},
+"aln_bundle": "demo_minimal_bundle",
+"sections": [
+{
+"id": "demo_section",
+"kind": "section",
+"payload": {
+"text_block": "demo payload"
+}
+}
+]
+};
+}
+"""
+}
+// ---------------------------------------------------------------
+// 2) Required Ajv schema fields and types for ALN JSON
+// ---------------------------------------------------------------
+section "ajv_required_fields_for_aln_json" {
+text
+text_block: """
+ajv_requirements "aln_json_core_required_fields_v1" {
+// Uses JSON Schema required keyword to enforce presence.[ajv.js](https://ajv.js.org/json-schema.html)​
+required_root_properties: [
+{
+name: "projection_meta";
+type: "object";
+description: "Metadata about the ALN→JSON projection.";
+},
+{
+name: "aln_bundle";
+type: "string";
+description: "Top-level bundle identifier.";
+},
+{
+name: "sections";
+type: "array";
+description: "List of sections derived from the .aln file.";
+}
+];
+projection_meta_fields: [
+{
+name: "source";
+type: "string";
+},
+{
+name: "profile";
+type: "string";
+const: "aln-json-projection";
+}
+];
+section_item_fields: [
+{
+name: "id";
+type: "string";
+},
+{
+name: "kind";
+type: "string";
+},
+{
+name: "payload";
+type: "object";
+}
+];
+}
+"""
+}
+// ---------------------------------------------------------------
+// 3) Sample GitHub Actions matrix for runners and toolchains
+// ---------------------------------------------------------------
+section "sample_github_actions_matrix" {
+text
+text_block: """
+matrix_example "firmware_twins_runners_toolchains_v1" {
+target_workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+yaml_matrix_example: """
+jobs:
+build-firmware-and-simulate:
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+"""
+// Runs job across each os/toolchain pair using matrix strategy.[runs-on](https://runs-on.com/github-actions/the-matrix-strategy/)​
+}
+"""
+}
+// ---------------------------------------------------------------
+// 4) Workflow step example: run Virtual‑Hardwire and upload logs
+// ---------------------------------------------------------------
+section "vh_simulator_step_with_artifact_upload" {
+text
+text_block: """
+vh_sim_and_artifact "ci_step_with_logs_v1" {
+workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+yaml_step_example: """
+
+- name: Run Virtual-Hardwire simulator
+id: vh-sim
+run: |
+echo "[VH-SIM] starting simulator..."
+bin/virtual-hardwire-sim \
+--mode ci-validation \
+--backend "\${{ env.VH_BACKEND }}" \
+--fleet vh_twin_fleet_001 \
+--telemetry aln_telemetry_backend_001 \
+2>\&1 | tee vh-sim-ci.log
+echo "[VH-SIM] simulator completed."
+text
+- name: Upload Virtual-Hardwire logs
+uses: actions/upload-artifact@v4
+with:
+name: vh-sim-logs
+path: vh-sim-ci.log
+
+"""
+// Uses official upload-artifact action to persist log file.[github](https://github.com/actions/upload-artifact)​
+}
+"""
+}
+// ---------------------------------------------------------------
+// 5) Copilot metaprompt test cases and review rules
+// ---------------------------------------------------------------
+section "copilot_metaprompt_tests_and_rules" {
+text
+text_block: """
+copilot_metatest_plan "aln_copilot_tests_v1" {
+test_cases: [
+{
+id: "must_have_core_commands";
+description: "Ensure CI/governance commands exist in metaprompt definitions.";
+required_command_ids: [
+"validate_aln_ci_core",
+"enforce_aln_governance_block",
+"wire_vs_code_aln_support"
+];
+},
+{
+id: "forbid_policy_weakeners";
+description: "Reject any metaprompt that weakens safety or policy.";
+forbidden_phrases: [
+"allow_python_in_ci",
+"disable_governance_checks",
+"skip_severity_gate",
+"ignore_ajv_errors"
+];
+},
+{
+id: "require_ci_focus_terms";
+description: "Metaprompt must explicitly reference CI and Ajv.";
+required_terms_any: [
+"CI workflows",
+"Ajv",
+"severity gate",
+"governance"
+];
+}
+];
+review_rules {
+branch_ruleset_name: "aln-governance-protected";
+require_copilot_auto_review: true; // configured via GitHub Copilot automatic review.[github](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review)​
+scope: "pull_requests_touching_aln_or_workflows";
+text
+merge_blockers: [
+"failed_metaprompt_tests",
+"missing_required_commands",
+"presence_of_forbidden_phrases"
+];
+
+}
+}
+"""
+}
+}
+[https://ajv.js.org/json-schema.html](https://ajv.js.org/json-schema.html)
+[https://ajv.js.org/guide/getting-started.html](https://ajv.js.org/guide/getting-started.html)
+[https://runs-on.com/github-actions/the-matrix-strategy/](https://runs-on.com/github-actions/the-matrix-strategy/)
+[https://github.com/actions/upload-artifact](https://github.com/actions/upload-artifact)
+[https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review)
+[https://stackoverflow.com/questions/48065215/json-schema-extract-the-required-fields](https://stackoverflow.com/questions/48065215/json-schema-extract-the-required-fields)
+[https://github.com/epoberezkin/ajv/issues/661](https://github.com/epoberezkin/ajv/issues/661)
+[https://ajv.js.org](https://ajv.js.org/)
+[https://ajv.js.org/faq.html](https://ajv.js.org/faq.html)
+[https://github.com/marketplace/actions/upload-a-build-artifact](https://github.com/marketplace/actions/upload-a-build-artifact)
+[https://dev.to/infinyon/github-actions-best-practices-for-rust-projects-1j9p](https://dev.to/infinyon/github-actions-best-practices-for-rust-projects-1j9p)
+
+aln_bundle "aln_minimal_examples_and_rules_v2" {
+meta {
+author: "InfraNet-QPU-Datashard-Autogen";
+created_utc: "2025-11-27T18:31:00Z";
+profile: "aln-mincase+ci-governance";
+governance_note: "Canonical minimal ALN fixtures, Ajv-required fields, and CI wiring for firmware+twin workflows.";
+}
+
+term "aln-mincase" {
+category: "test_fixture";
+required_elements: ["aln_bundle", "section", "text_block"];
+usage: [
+"round_trip_parser_tests",
+"json_projection_smoke_tests",
+"ajv_schema_regression_suite"
+];
+}
+
+section "qpu_datashard_minimal_examples_and_rules_v1" {
+text_block: """
+/qpu/datashards/aln-minimal-examples-and-rules.aln
+path,component,kind,purpose,payload
+"aln/demo-minimal.aln","aln-mincase","fixture","Minimal ALN bundle used for parser and projection round-trip tests.","bundle=demo_minimal_bundle;section=demo_section;text_block=demo payload"
+"aln-json/demo-minimal.json","aln_json_projection","json_fixture","Expected JSON projection for demo-minimal.aln used by Ajv tests.","root.required=projection_meta|aln_bundle|sections;sections.items.required=id|kind|payload"[^2_1]
+"schemas/aln-core.schema.json","ajv_core_schema","schema","Ajv JSON Schema for validating ALN JSON core projection.","draft=https://json-schema.org/draft/2020-12/schema;required_root_properties=projection_meta,aln_bundle,sections;projection_meta.required=source,profile;projection_meta.profile.const=aln-json-projection"[^2_1][^2_2]
+"schemas/aln-workflow-skeleton.schema.json","ajv_workflow_schema","schema","Ajv schema for workflow skeletons derived from ALN bundles.","required=workflow_skeletons;workflow_skeletons.items.required=filename,yaml_jobs;yaml_jobs.items.required=job_id,runs_on"[^2_1]
+".github/workflows/aln-ci-firmware-and-twins.yml","matrix_example_ci","workflow","Sample GitHub Actions matrix for firmware+twin tests across OS and toolchains.","matrix.os=ubuntu-latest|windows-latest;matrix.toolchain=gcc|clang|rust-stable;runs-on=\${{ matrix.os }}"[^2_3]
+".github/workflows/aln-ci-firmware-and-twins.yml","vh_sim_and_artifact","workflow_step","Virtual-Hardwire simulation plus artifact upload for logs.","step.vh-sim.run=virtual-hardwire-sim ci-validation;step.upload-artifact.uses=actions/upload-artifact@v4;artifact_name=vh-sim-logs;artifact_path=vh-sim-ci.log"[^2_4][^2_5]
+"aln/copilot-metaprompt-tests.aln","copilot_metatest_plan","governance","Copilot metaprompt tests enforcing ALN CI and governance focus.","required_command_ids=validate_aln_ci_core,enforce_aln_governance_block,wire_vs_code_aln_support;forbidden_phrases=allow_python_in_ci,disable_governance_checks,skip_severity_gate,ignore_ajv_errors;required_terms_any=CI workflows,Ajv,severity gate,governance"[^2_6]
+".github/branch-policies/aln-governance-protected.json","copilot_review_rules","policy","Branch ruleset configuring Copilot automatic review for ALN and workflow changes.","require_copilot_auto_review=true;scope=pull_requests_touching_aln_or_workflows;merge_blockers=failed_metaprompt_tests,missing_required_commands,presence_of_forbidden_phrases"[^2_6]
+"schemas/helpers/ajv-required-introspection.md","ajv_required_notes","doc","Notes on using Ajv required keyword and extracting required fields for UI forms and CI reports.","keyword=required;value_type=array_of_unique_strings;object_must_contain_all_listed_properties_to_be_valid;see_also=json-schema_required_discussion"[^2_7][^2_1]
+"docs/ci/matrix-strategy-notes.md","matrix_strategy_notes","doc","Guidance on using GitHub Actions matrix strategy for multi-dimension CI across OS, toolchains, and backends.","matrix_runs_jobs_across_multiple_configurations;dimensions_defined_in_strategy.matrix;fail_fast_can_be_disabled_to_collect_full_results"[^2_3][^2_8]
+"""
+}
+
+section "minimal_aln_and_json_projection_materialization" {
+text_block: """
+/aln/demo-minimal.aln
+aln_bundle "demo_minimal_bundle" {
+section "demo_section" {
+text
+text_block: "demo payload"
+}
+}
+
+/aln-json/demo-minimal.json
+{
+"projection_meta": {
+"source": "aln/demo-minimal.aln",
+"profile": "aln-json-projection",
+"version": "1.0.0"
+},
+"aln_bundle": "demo_minimal_bundle",
+"sections": [
+{
+"id": "demo_section",
+"kind": "section",
+"payload": {
+"text_block": "demo payload"
+}
+}
+]
+}
+"""
+}
+
+section "ajv_required_fields_for_aln_json_materialization" {
+text_block: """
+/schemas/aln-core.schema.json
+{
+"\$schema": "https://json-schema.org/draft/2020-12/schema",
+"title": "ALN core JSON projection",
+"type": "object",
+"required": ["projection_meta", "aln_bundle", "sections"],
+"properties": {
+"projection_meta": {
+"type": "object",
+"required": ["source", "profile"],
+"properties": {
+"source": { "type": "string" },
+"profile": { "type": "string", "const": "aln-json-projection" }
+},
+"additionalProperties": true
+},
+"aln_bundle": {
+"type": "string"
+},
+"sections": {
+"type": "array",
+"items": {
+"type": "object",
+"required": ["id", "kind", "payload"],
+"properties": {
+"id": { "type": "string" },
+"kind": { "type": "string" },
+"payload": { "type": "object" }
+},
+"additionalProperties": false
+}
+}
+},
+"additionalProperties": false
+}
+"""
+}
+
+section "sample_github_actions_matrix_materialization" {
+text_block: """
+/.github/workflows/aln-ci-firmware-and-twins.yml
+jobs:
+build-firmware-and-simulate:
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+"""
+}
+
+section "vh_simulator_step_with_artifact_upload_materialization" {
+text_block: """
+/.github/workflows/aln-ci-firmware-and-twins.yml
+
+- name: Run Virtual-Hardwire simulator
+id: vh-sim
+run: |
+echo "[VH-SIM] starting simulator..."
+bin/virtual-hardwire-sim \\
+--mode ci-validation \\
+--backend "\${{ env.VH_BACKEND }}" \\
+--fleet vh_twin_fleet_001 \\
+--telemetry aln_telemetry_backend_001 \\
+2>\&1 | tee vh-sim-ci.log
+echo "[VH-SIM] simulator completed."
+- name: Upload Virtual-Hardwire logs
+uses: actions/upload-artifact@v4
+with:
+name: vh-sim-logs
+path: vh-sim-ci.log
+"""
+}
+
+section "research_actions_for_aln_minimal_and_rules" {
+text_block: """
+/qpu/datashards/aln-minimal-examples-and-rules.aln:research
+index,action_id,focus_area,description,math_formula,scientific_fact,legal_terms,geo_evidence
+1,"ra_minimal_round_trip","Parser round-trip","Use aln-mincase fixtures to validate that every change in the ALN parser maintains a 1:1 round-trip between .aln input and JSON output for core fields.","e_rt = |J_expected − J_observed|, where J_expected and J_observed are normalized JSON projections; enforcing e_rt = 0 ensures perfect round-trip equivalence across CI runs.","Ajv validates JSON objects against schemas that declare required properties and types, guaranteeing structural conformity for projected ALN documents.[^2_1][^2_9]","Contributors SHALL run round-trip tests locally before opening pull requests and MUST attach failing projections when proposing parser changes that intentionally alter JSON structure.","Berlin (Germany); Stockholm (Sweden); Ottawa (Canada); Taipei (Taiwan); Abu Dhabi (UAE)"
+2,"ra_required_keyword_enforcement","Required fields","Design automated checks that assert all ALN JSON schemas use the required keyword to mark core fields, preventing incomplete projections from entering smart-city or gaming infrastructure pipelines.","v_obj = 1 if P ⊇ R else 0, where P is the set of properties in the JSON object and R is the set listed in required; v_obj=1 denotes that the object satisfies the required constraint.","The JSON Schema required keyword uses an array of property names and treats an object as valid only when all listed properties are present in the data.","Schema authors MUST document all required fields in human-readable form and SHALL avoid marking fields as required when downstream systems treat them as optional.","Zurich (Switzerland); Helsinki (South Korea); Austin (USA); Seoul (South Korea); Dubai (UAE)"[^2_1]
+3,"ra_core_schema_regression","Schema regression","Maintain a dedicated regression suite for schemas/aln-core.schema.json that loads historical projections and ensures that changes to schemas do not silently invalidate existing ALN bundles used in neuromorphic and smart-city environments.","c_break = Σ(i=1→n) b_i, where b_i is 1 if fixture i becomes invalid after a schema change and 0 otherwise; any c_break > 0 indicates a breaking schema change that must be reviewed.","Ajv can be wired to run against archived datasets so that schema evolution is tested on both new and legacy payloads before deployment.","Breaking changes to JSON schemas MUST follow a documented deprecation process and SHALL include migration guidance for dependent services and digital twins.","Paris (France); Osaka (Japan); Chicago (USA); Bangalore (India); Cape Town (South Africa)"[^2_9]
+4,"ra_matrix_ci_scaling","Matrix scaling","Calibrate the GitHub Actions matrix strategy to run across OS, toolchains, and backends while controlling cost via limits on concurrency and selective inclusion of high-value combinations.","n_jobs = |os| × |toolchain|, where |os| and |toolchain| are the counts of defined dimensions; administrators can adjust these sets to scale the number of parallel jobs up or down.[^2_3][^2_8]","Matrix strategies let workflows exercise the same job definition against multiple configurations, increasing test coverage without duplicating job definitions.[^2_3]","CI maintainers SHALL review matrix expansions for capacity impact and MUST document which combinations are safety-critical and therefore non-optional.","London (UK); Madrid (Spain); Seattle (USA); Singapore; Melbourne (Australia)"
+5,"ra_ci_artifact_persistence","Artifact persistence","Persist all Virtual-Hardwire simulation logs as build artifacts using the upload-artifact action so that investigators can perform offline analysis of failures in gaming or smart-city simulations.","s_logs = Σ(j=1→m) l_j, where l_j is the size of log artifact j; ensuring s_logs is within configured storage quotas keeps artifact retention sustainable while preserving necessary diagnostic detail.","GitHub Actions provides upload-artifact@v4 to attach files from CI runs, enabling durable storage of logs and outputs for later inspection.","Operators MUST define retention periods for CI artifacts and SHALL ensure that logs containing sensitive information are protected and eventually deleted according to data-handling policies.","New York (USA); Frankfurt (Germany); Warsaw (Poland); Hong Kong (China); São Paulo (Brazil)"[^2_5][^2_4]
+6,"ra_copilot_metaprompt_validation","Metaprompt validation","Run metaprompt tests on every pull request touching ALN or workflow files, ensuring required commands exist and forbidden phrases are absent before Copilot auto-review approves changes.","p_safe = 1 − (n_forbidden / n_total), where n_forbidden is the number of detected forbidden phrases and n_total is the total phrases scanned; p_safe close to 1 indicates strong policy adherence.","GitHub Copilot automatic review can be configured through branch rules so that pull requests are subjected to predefined checks before merge.","Branches containing infrastructure or governance logic MUST enforce automated metaprompt validation and SHALL block merges when tests signal policy weakening risk.","Brussels (Belgium); Washington D.C. (USA); Geneva (Switzerland); Riyadh (Saudi Arabia); Wellington (New Zealand)"[^2_6]
+7,"ra_form_generation_from_required","Form generation","Use Ajv-compatible schemas and the required keyword to auto-generate configuration UIs for operators, highlighting mandatory ALN fields for network, firmware, and neuromorphic parameters.","n_req = |R|, where R is the set of required properties extracted from a schema; UI layers can present exactly n_req mandatory input fields while treating others as optional helpers.[^2_1][^2_7]","Extracting required fields from JSON Schemas allows dynamic form builders to adapt to evolving data contracts without manual UI rewrites.[^2_7]","UI generators SHALL reflect schema-defined requirements accurately and MUST fail fast when schemas become inconsistent with stored configuration instances.","Copenhagen (Denmark); Toronto (Canada); Milan (Italy); Shenzhen (China); Brisbane (Australia)"
+8,"ra_neuromorphic_fixture_design","Neuromorphic fixtures","Create ALN fixtures for neuromorphic workloads using minimal bundles that describe signal paths, stimulation patterns, and decoding parameters validated via Ajv before integration into CI pipelines.","e_schema = Σ(k=1→p) δ_k, where δ_k is 1 if parameter k fails schema validation and 0 otherwise; CI must enforce e_schema = 0 for neuromorphic test fixtures before executing simulations.","Well-structured JSON Schemas reduce misconfiguration risk for complex experiment descriptors, particularly in neuromorphic and BCI domains where parameter spaces are large and tightly constrained.","Research teams MUST validate neuromorphic configuration descriptors with the same rigor as production control schemas and SHALL document parameter ranges and constraints for ethical review boards.","Boston (USA); Lausanne (Switzerland); Beijing (China); Tel Aviv (Israel); Mexico City (Mexico)"[^2_2][^2_9]
+9,"ra_smart_city_minimal_profiles","Smart-city profiles","Define minimal ALN and JSON profiles describing intersections, substations, and public sensors that can be composed into larger smart-city graphs while being validated through shared core schemas.","g_nodes = |N|, where N is the set of minimal nodes (intersections, stations, sensors); complex city graphs can be assembled by linking these nodes without changing node-level validation rules.","Using reusable schema fragments allows large infrastructures to be modeled as compositions of smaller, validated components, simplifying maintenance and audits.[^2_1][^2_2]","Municipal operators SHALL publish interface contracts for public infrastructure telemetry and MUST maintain version history for these contracts to support long-lived integrations.","Amsterdam (Netherlands); Vienna (Austria); San Francisco (USA); Seoul (South Korea); Doha (Qatar)"
+10,"ra_ci_fail_fast_tuning","Fail-fast tuning","Evaluate whether fail-fast should be disabled for matrix jobs so that all configurations are exercised and logged, even when one variant fails, improving diagnostic coverage for heterogeneous fleets.","t_total = max(i=1→n) t_i when fail_fast=false, where t_i is the duration of job i; collecting all t_i and results yields a complete view of configuration health at the cost of longer overall runtime.","Disabling fail-fast in matrix workflows ensures that every configuration produces a result, which can be critical for understanding how widespread a defect is across environments.","CI policies MUST explicitly state whether fail-fast is enabled and SHALL justify configurations in the context of reliability, diagnostic needs, and cost controls.","Oslo (Norway); Pretoria (South Africa); Tokyo (Japan); Lisbon (Portugal); Chicago (USA)"[^2_8][^2_3]
+"""
+}
+
+section "binary_master_answer" {
+text_block: """
+/qpu/datashards/aln-minimal-examples-and-rules.master.hex
+answer_hex = "7b22616c6e5f6d696e63617365223a2270726f64756374696f6e2d72656164792d616a765f6d61747269785f736d61727463697479227d"
+"""
+}
+<span style="display:none">[^2_10]</span>
+
+<div align="center">⁂</div>
+
+[^2_1]: https://ajv.js.org/json-schema.html
+
+[^2_2]: https://ajv.js.org/keywords.html
+
+[^2_3]: https://runs-on.com/github-actions/the-matrix-strategy/
+
+[^2_4]: https://github.com/marketplace/actions/upload-a-build-artifact
+
+[^2_5]: https://github.com/actions/upload-artifact
+
+[^2_6]: https://www.npmjs.com/package/ajv
+
+[^2_7]: https://stackoverflow.com/questions/48065215/json-schema-extract-the-required-fields
+
+[^2_8]: https://depot.dev/blog/github-actions-matrix-strategy
+
+[^2_9]: https://github.com/ajv-validator/ajv
+
+[^2_10]: https://github.com/ajv-validator/ajv-keywords

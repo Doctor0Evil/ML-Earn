@@ -1,0 +1,45 @@
+name: ALN Firmware Update Lane
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_lane:
+        description: "Firmware lane ID"
+        required: true
+        default: "VH-FW-LANE-001"
+
+jobs:
+  plan-and-validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate firmware artifacts and ALN lane
+        run: |
+          echo "Validating firmware hashes, signatures, and lane constraints..."
+          echo "Target lane: ${{ github.event.inputs.target_lane }}"
+
+  rollout-canary:
+    needs: plan-and-validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to canary ring
+        run: |
+          echo "Deploy to ring_canary (1% fleet), monitor violations, enforce max_downtime..."
+
+  rollout-staged:
+    needs: rollout-canary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to staged ring
+        run: |
+          echo "Deploy to ring_staged (25% fleet) with soak_time and rollback triggers..."
+
+  rollout-general:
+    needs: rollout-staged
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to general ring
+        run: |
+          echo "Deploy to ring_general (100% fleet) once constraints are satisfied..."

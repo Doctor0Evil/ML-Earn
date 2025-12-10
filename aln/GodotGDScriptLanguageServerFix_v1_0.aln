@@ -1,0 +1,72 @@
+ALN_MODULE GodotGDScriptLanguageServerFix_v1_0
+VERSION 1.0.0
+META "author": "copilot-synthesizer";
+DESCRIPTION "Hardens and automates common fixes for the Godot GDScript LSP connectivity error."
+
+RUNTIME_PROFILE "SafeDevBox" {
+    NODE_REQUIREMENTS {
+        MIN_VERSION "18.0.0"
+    }
+}
+
+MODULE ProjectConfigSanitizer {
+    SCOPE "Make minimal and safe edits to Godot editor/project config to enable GDScript LSP on loopback.";
+    SANITY_CHECKS [
+        "fail_if_project_godot_missing": false,
+        "create_backup_of_edited_files": true
+    ];
+}
+
+MODULE IDEIntegration {
+    SCOPE "Rewrite IDE configuration for VS Code and Neovim to point to local loopback language server and provide safe launch profiles.";
+    RESTRAINTS [
+        "no-remote-hosts",
+        "no-automated-firewall-mods"
+    ];
+}
+
+POLICY Policy.GodotLSPStandard_v1 {
+    description: "Organization-level policy to standardize a Godot LSP port, enforce IDE configs, and firewall loopback safety.";
+    properties:
+    {
+        defaultPort: 6008;
+        allow_firewall_policy: false;
+        firewall_policy_file: ".aln/firewall.policy.lock.json";
+    }
+}
+
+TRANSFORM enable_language_server {
+    description: "Normalize editor_settings-*.tres to enable Godot's language server on 127.0.0.1 using detection or explicit override (supports --force-port and save-config)."
+    script: "scripts/fix-godot-lsp.cjs --enable-language-server";
+}
+
+TRANSFORM vscode_gdscript_lsp {
+    description: "Rewrite VS Code settings and launch profiles to use 127.0.0.1 and the selected port (detection or forced) and add a safe launch profile for Godot LSP.";
+    script: "scripts/fix-godot-lsp.cjs --vscode";
+}
+
+TRANSFORM neovim_gdscript_lsp {
+    description: "Generate a sample Neovim LSP config using host 127.0.0.1 and detected port (6008/6005).";
+    script: "scripts/fix-godot-lsp.cjs --neovim";
+}
+
+TRANSFORM firewall_helper {
+    description: "Show recommended platform-specific firewall commands to allow loopback LSP traffic (prints commands only by default). Requires policy `.aln/firewall.policy.lock.json` for apply. Supports simulate and confirm flags.";
+    script: "scripts/fix-godot-lsp.cjs --allow-firewall-loopback";
+}
+
+PIPELINE Fix_GDScript_Language_Server_Error {
+    step 1: diagnostics {
+        script: "scripts/fix-godot-lsp.cjs --diagnostics";
+    }
+    step 2: apply_fix {
+        depends_on: [diagnostics];
+        script: "scripts/fix-godot-lsp.cjs --apply";
+    }
+    step 3: verify_connection {
+        depends_on: [apply_fix];
+        script: "scripts/fix-godot-lsp.cjs --verify";
+    }
+}
+
+ALN_MODULE_END

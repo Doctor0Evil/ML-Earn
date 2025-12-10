@@ -1,0 +1,97 @@
+aln PROGRAM GitHubExtensionGuardV1
+  meta:
+    id          "GITHUB-EXT-GUARD-001"
+    owner       "Doctor Jacob Scott Farmer"
+    scope       "VS Code GitHub PR extension health + GitSessionGuardian stack"
+    description "Detects repeated GitHub PR extension API warnings and applies a deterministic, safe recovery sequence."
+  endmeta
+
+  env:
+    VSCODE_EXT_ID       "GitHub.vscode-pull-request-github"
+    LOG_PATH            "c:/Users/Hunter/AppData/Roaming/Code/logs"
+    MAX_WARN_THRESHOLD  5
+    COOLDOWN_SECONDS    60
+  endenv
+
+  objects:
+    WarnState struct:
+      windowStartUtc string
+      count          int
+      lastMessageUtc string
+    endstruct
+  endobjects
+
+  function nowUtc() string
+  endfunction
+
+  function shell(cmd string, args []string) (string,int)
+  endfunction
+
+  function log(msg string)
+    shell("bash", ["-lc","echo \""+nowUtc()+" | "+msg+"\" >> github-extension-guard.log"])
+  endfunction
+
+  function readVSCodeLogTail() []string
+    # Simplified: tail last 200 lines from current session log
+    out, _ := shell("bash", ["-lc",
+      "cd \""+LOG_PATH+"\" && ls -1t */*/*/window.log | head -n1 | xargs -r tail -n 200"
+    ])
+    return splitLines(out)
+  endfunction
+
+  function updateWarnState(lines []string) WarnState
+    st := WarnState{
+      windowStartUtc: nowUtc(),
+      count: 0,
+      lastMessageUtc: "",
+    }
+    for _, l in range lines
+      if contains(l, VSCODE_EXT_ID) and contains(l, "API is not available") then
+        st.count = st.count + 1
+        st.lastMessageUtc = nowUtc()
+      end if
+    endfor
+    return st
+  endfunction
+
+  function disableGitHubExtension()
+    _, _ := shell("code", ["--disable-extension", VSCODE_EXT_ID])
+    log("ACTION disable-extension "+VSCODE_EXT_ID)
+  endfunction
+
+  function enableGitHubExtension()
+    _, _ := shell("code", ["--enable-extension", VSCODE_EXT_ID])
+    log("ACTION enable-extension "+VSCODE_EXT_ID)
+  endfunction
+
+  function reloadVSCodeWindow()
+    # ask VS Code to reload via CLI command id
+    _, _ := shell("code", ["--command","workbench.action.reloadWindow"])
+    log("ACTION reload-window")
+  endfunction
+
+  function runSelfCheck() string
+    # Optionally run GitSessionGuardianV1 status to ensure git layer ok
+    _, _ := shell("aln", ["GitSessionGuardianV1","safe-status"])
+    return "ok"
+  endfunction
+
+  command guard-loop
+    log("START guard-loop")
+    while true
+      lines := readVSCodeLogTail()
+      st := updateWarnState(lines)
+      if st.count >= MAX_WARN_THRESHOLD then
+        log("WARN_THRESHOLD exceeded count="+st.count.toString())
+        disableGitHubExtension()
+        reloadVSCodeWindow()
+        sleep(COOLDOWN_SECONDS)
+        enableGitHubExtension()
+        runSelfCheck()
+        log("RECOVERY_SEQUENCE completed")
+      end if
+      sleep(10)
+    endwhile
+  endcommand
+
+endprogram

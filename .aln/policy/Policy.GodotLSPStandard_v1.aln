@@ -1,0 +1,75 @@
+ALN_MODULE Policy.GodotLSPStandard_v1
+VERSION 1.0.0
+META {
+  author: "copilot-synthesizer";
+  description: "Policy module that standardizes Godot LSP ports, firewall policy opt-in, and test policy binding for ALN cross-runtime harness.";
+  scope: "Godot LSP + Editor config policy only";
+}
+
+SECTION LspPortPolicy {
+  STRUCT LspPortConfig {
+    required_port : int;
+    min_port      : int;
+    max_port      : int;
+    allow_loopback: bool;
+  }
+
+  DEFAULTS defaults = LspPortConfig{
+    required_port = 6008;
+    min_port      = 1024;
+    max_port      = 65535;
+    allow_loopback = true;
+  };
+
+  FUNCTION validate_lsp_port(LspPortConfig cfg) {
+    if (cfg.required_port < cfg.min_port or cfg.required_port > cfg.max_port) {
+      fail "Configured required_port is outside allowed range";
+    }
+  }
+}
+
+SECTION FirewallBinding {
+  FUNCTION build_cli_from_policy(LspPortPolicy.LspPortConfig cfg) -> object {
+    # pseudo-binding to Firewall_CLI_Extensions_v2_0.CliOptions
+    return {
+      force_port: true,
+      force_port_value: cfg.required_port,
+      allow_firewall_loopback: cfg.allow_loopback,
+      apply: false,
+      confirm: false,
+      diagnostics: false,
+      policy_lockfile: '.aln/firewall.policy.lock.json'
+    };
+  }
+
+  FUNCTION describe_firewall_requirements(LspPortPolicy.LspPortConfig cfg) {
+    log "LSP must bind to port " + to_string(cfg.required_port) + ", allow_loopback=" + bool_to_string(cfg.allow_loopback) + ", firewall apply requires .aln/firewall.policy.lock.json and --confirm";
+  }
+}
+
+SECTION TestPolicyBinding {
+  STRUCT GodotLspTestProfile {
+    require_json_lint : bool;
+    require_aln_lint  : bool;
+    allow_optional_node  : bool;
+    allow_optional_python: bool;
+    allow_optional_dotnet : bool;
+  }
+
+  DEFAULTS test_defaults = GodotLspTestProfile{
+    require_json_lint = true;
+    require_aln_lint = true;
+    allow_optional_node = true;
+    allow_optional_python = true;
+    allow_optional_dotnet = true;
+  };
+
+  PIPELINE GodotLspPolicy_TestRunner {
+    description: "Delegates to the cross-runtime test orchestrator while enforcing required lint checks";
+    sequence = [
+      ALN_CrossCompatible_NoNodeToolkit_v1_0.CrossRuntime_Test_Orchestrator
+    ];
+  }
+}
+
+ALN_MODULE_END

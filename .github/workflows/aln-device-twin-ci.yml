@@ -1,0 +1,39 @@
+name: Virtual Hardware Device Twin CI
+
+on:
+  push:
+    paths:
+      - "aln/**device_twin**.aln"
+      - "firmware/**"
+  pull_request:
+    paths:
+      - "aln/**device_twin**.aln"
+      - "firmware/**"
+
+jobs:
+  build-and-simulate-twins:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        toolchain: [gcc, clang, rust-stable]
+        sim_backend: [vh-cpu, vh-qpu]
+    env:
+      ALN_DIR: aln
+      FW_DIR: firmware
+      TOOLCHAIN: ${{ matrix.toolchain }}
+      VH_BACKEND: ${{ matrix.sim_backend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile firmware (non-Python stacks only)
+        run: |
+          echo "Compile firmware with ${{ matrix.toolchain }} on ${{ matrix.os }}..."
+          # Insert concrete toolchain commands per execution_targets
+
+      - name: Run virtual hardware simulations
+        run: |
+          echo "Load ALN device twins and execute virtual-hardware simulations..."
+          echo "Backend: ${{ matrix.sim_backend }}, Fleet: vh_twin_fleet_001"
+          # bin/virtual-hardwire-sim --mode ci-validation --backend ${{ matrix.sim_backend }} --fleet vh_twin_fleet_001

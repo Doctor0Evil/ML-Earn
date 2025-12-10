@@ -1,0 +1,335 @@
+filename: copilot-aln-primary-objective-and-functions.aln
+destination-folder: /aln/github_copilot/
+
+aln_document {
+  header {
+    aln_version: "1.0";
+    qpu_math_profile: "QPU.Math+";
+    title: "ALN Primary Objective and Real-World Function Set for Copilot";
+    design_scope: [
+      "GitHub-native orchestration",
+      "AI coding agents and copilots",
+      "Neuromorphic systems and BCI devices",
+      "Virtual-hardware twins of physical devices",
+      "Smart devices, smart cities, infrastructure"
+    ];
+    python_exclusion_policy: "No Python runtime or libraries; ALN must target non-Python stacks and bare-metal / RTOS / containerized runtimes only.";
+    copilot_alignment_note: "ALN is a pseudo-style, executable configuration and control language designed to be fully ingestible by GitHub Copilot and IDE agents, while remaining conflict-free with policy frameworks via quantified math constraints.";
+  }
+
+  ###################################################################
+  # Primary objective description for Copilot
+  ###################################################################
+  section "aln_primary_objective_for_copilot" {
+    text
+    text_block: """
+ALN is a universal, executable pseudo-language whose primary objective is to provide a machine-governable, policy-safe, and hardware-aware control surface for AI systems, GitHub workflows, and advanced technology platforms.
+
+The syntax is intentionally regular, JSON/TypeScript-adjacent, and amenable to static validation so Copilot, ALN-aware agents, and CI can parse, reason, and transform it deterministically.
+
+ALN documents describe *what* to provision, simulate, enforce, or monitor across real and virtual devices, while deferring *how* to concrete runtimes (C/C++, Rust, Zig, Go, WebAssembly, HDL, RTOS configs, container specs, FPGA bitstreams, etc.), explicitly excluding Python paths to avoid contaminated binaries, legacy exploits, and fragile dependency chains.
+
+Every ALN entity can carry:
+  - quant_math_constraints: Quantified Math statements defining safety, jurisdictional, and operational limits across multiple regulatory environments;
+  - execution_targets: concrete runtime targets and hardware profiles;
+  - policy_jurisdiction_matrix: multi- and cross-jurisdictional compliance mappings, making ALN artifacts inherently portable and policy-resilient.
+    """;
+  }
+
+  ###################################################################
+  # 25 resourceful real-world ALN function patterns (high level)
+  ###################################################################
+  section "aln_real_world_function_catalog" {
+    text
+    text_block: """
+The following 25 function patterns are designed as *real-world* ALN usage modes for GitHub, Copilot, and future-tech stacks (neuromorphic, BCI, nanoswarm, augmented users, smart cities, and virtual hardware twins). Each pattern is intended to be wired to non-Python implementations (for example, Rust microservices, C/C++ firmware, FPGA/HDL pipelines, or WebAssembly modules).
+
+1) repo_policy_contract()
+   - Purpose: Declare per-repository ALN governance: allowed languages, security baselines, test minimums, and CI gates.
+   - Impact: Ensures Copilot and CI always operate inside explicit, versioned policy envelopes across GitHub repos.
+
+2) device_twin_define()
+   - Purpose: Define a virtual twin of a physical device (sensor, actuator, medical instrument, edge gateway) including IO pins, buses, timing, and safety constraints.
+   - Impact: Enables reproducible simulation, firmware testing, and AI planning against clones of real hardware.
+
+3) vm_bootstrap_plan()
+   - Purpose: Describe full bootstrapping for GitHub-hosted runners, self-hosted runners, and Codespaces (excluding Python), including OS, toolchains, caches, and isolation hardening.
+   - Impact: Reduces cold-start latency, drift, and misconfiguration for CI VMs.
+
+4) neuromorphic_core_profile()
+   - Purpose: Declare topology, neuron models, synapse precision, and on-chip routing for neuromorphic hardware (for example, Loihi-class or memristor arrays).
+   - Impact: Allows AI agents and toolchains to compile workloads against precise neuromorphic characteristics.
+
+5) bci_channel_contract()
+   - Purpose: Specify channel counts, sampling rates, safety thresholds, and allowed stimulation patterns for BCI devices.
+   - Impact: Ensures any generated code or protocol sequence respects human-safety constraints and medical regulations.
+
+6) nanoswarm_flightplan()
+   - Purpose: Orchestrate behaviors of nanoscale or micro-robotic collectives in strictly bounded operational envelopes (for example, lab-on-chip, controlled clinical devices).
+   - Impact: Keeps nanoswarm control within tightly validated, auditable scenarios, not open-ended behaviors.
+
+7) smart_city_zone_profile()
+   - Purpose: Represent a physical zone (intersection, corridor, ICU wing, data hall) as a graph of devices, constraints, and service levels.
+   - Impact: Enables city-scale "infrastructure as ALN" for planning, simulation, and live orchestration.
+
+8) telemetry_pipeline_spec()
+   - Purpose: Define what observability data must be emitted by components (fields, sampling, retention), including anonymization and aggregation rules.
+   - Impact: Standardizes logs and metrics across services and devices for AI-based reliability and cost optimization.
+
+9) ci_optimization_plan()
+   - Purpose: Describe latency, cost, and reliability SLOs for GitHub workflows, plus allowed refactor strategies (matrix builds, caching, artifact reuse).
+   - Impact: Gives Copilot a contract to propose safe CI performance improvements.
+
+10) firmware_update_lane()
+    - Purpose: Specify staged firmware rollout logic for devices (rings, cohorts, rollback rules, cryptographic checks, maximum downtime windows).
+    - Impact: Reduces the risk of bricking neuromorphic, BCI, or medical-edge devices during updates.
+
+11) regulatory_trace_matrix()
+    - Purpose: Map requirements (HIPAA, MDR, IEC 62304, ISO 27001, etc.) into concrete ALN artifacts: tests, configs, audit logs, and change controls.
+    - Impact: Provides quantifiable compliance coverage that Copilot can respect and extend.
+
+12) security_invariant_set()
+    - Purpose: Declare security invariants (no-plaintext-secrets, isolation boundaries, allowed cipher suites, memory safety expectations).
+    - Impact: Lets Copilot and CI flag or auto-correct diffs that violate invariants.
+
+13) hardware_bus_contract()
+    - Purpose: Describe timing, voltage, protocol framing, and message schemas for hardware buses (SPI, I2C, CAN, custom LVDS links).
+    - Impact: Ensures generated firmware and test harnesses never exceed electrical or protocol limits.
+
+14) virtual_lab_experiment()
+    - Purpose: Compose virtualized clones of multiple devices plus scenarios (fault injection, stress tests) into reproducible experiment definitions.
+    - Impact: Makes hardware R&D and medical-device experiments replayable, sharable, and reviewable.
+
+15) copilot_edit_plan()
+    - Purpose: Define bounded multi-file edit scopes, invariants, and test expectations for Copilot-led refactors or features.
+    - Impact: Improves safety and predictability of AI-driven edits in GitHub repos.
+
+16) edge_cluster_deployment_map()
+    - Purpose: Describe deployment layouts for edge clusters (gateways, on-prem racks, industrial PCs) with version, rollout, and failover rules.
+    - Impact: Bridges GitHub CI artifacts to field hardware deployments.
+
+17) emergency_shutdown_graph()
+    - Purpose: Encode device- and system-wide emergency behaviors (disconnect, safe pose, zeroization, audit logging) in a machine-checkable graph.
+    - Impact: Guarantees there is a deterministic, verifiable safety path across all connected devices.
+
+18) qos_signal_profile()
+    - Purpose: Define what quality-of-service metrics must be tracked for each service or device (latency, jitter, error rates, power draw).
+    - Impact: Allows automatic dashboards and AI agents to drive targeted reliability and efficiency improvements.
+
+19) jurisdictional_policy_envelope()
+    - Purpose: Capture per-region constraints (data residency, consent, device approval status) as quantifiable rules.
+    - Impact: Makes ALN artifacts multi- and cross-jurisdictionally compliant by construction.
+
+20) virtual_hardware_binding()
+    - Purpose: Bind virtual device twins to real device identifiers, firmware branches, and GitHub repos.
+    - Impact: Keeps simulation results and live fleet behavior tightly linked.
+
+21) real_time_scheduler_profile()
+    - Purpose: Specify task periods, deadlines, priorities, and watchdogs for RTOS or bare-metal schedulers.
+    - Impact: Ensures generated code remains schedulable and bounded on constrained devices.
+
+22) maintenance_window_plan()
+    - Purpose: Declare allowable maintenance windows, blackout periods, and coordination rules across devices and services.
+    - Impact: Prevents disruptive updates on critical infrastructure and clinical systems.
+
+23) anomaly_detection_contract()
+    - Purpose: Define expected ranges and detection rules over telemetry (for example, vibration, temperature, neural signal statistics).
+    - Impact: Enables offline and online anomaly detection that respects domain-specific safety thresholds.
+
+24) audit_evidence_map()
+    - Purpose: Map ALN artifacts, tests, and logs to audit requirements, with retention and access rules.
+    - Impact: Simplifies external audits and continuous assurance.
+
+25) hardware_reliability_profile()
+    - Purpose: Encode expected duty cycles, fatigue limits, and inspection intervals for physical components.
+    - Impact: Lets virtual hardware twins age and fail realistically in simulation, guiding maintenance and redesign.
+    """;
+  }
+
+  ###################################################################
+  # One executable-style ALN example (no Python)
+  # Example: device twin + CI + policy + virtual clone binding
+  ###################################################################
+  section "executable_example_device_twin_and_ci" {
+    text
+    text_block: """
+# This ALN block is designed to be consumed by:
+# - A GitHub Action that compiles firmware in Rust and C for a medical-grade EEG BCI device;
+# - A virtual hardware simulator that uses this twin as ground truth;
+# - A policy engine that enforces jurisdictional and safety constraints.
+# No Python runtimes or libraries are allowed in any target.
+
+aln_device_twin "eeg_bci_headset_v1" {
+  twin_id: "EEG-BCI-H1-REV-A";
+  physical_device_sku: "H1-BCI-32CH-1KHZ";
+  repo_binding: {
+    github_org: "NeuroSystemsLab";
+    github_repo: "eeg-bci-headset-firmware";
+    main_branch: "main";
+  };
+
+  execution_targets: [
+    "firmware_rust_mcu",
+    "firmware_c_dsp",
+    "fpga_signal_pipeline",
+    "wasm_control_plane"
+  ];
+
+  io_profile {
+    adc_channels: 32;
+    sampling_rate_hz: 1000;
+    resolution_bits: 24;
+    interface_bus: "SPI4";
+    spi_max_clock_hz: 12000000;
+    digital_io: {
+      trigger_in_pins: [1, 2];
+      trigger_out_pins: [3];
+      led_status_pins: [4, 5];
+    };
+  }
+
+  safety_envelope {
+    max_headset_surface_temp_c: 39.0;
+    max_leakage_current_ma: 0.1;
+    max_stimulation_current_ma: 1.0;
+    emergency_shutdown_latency_ms: 50;
+    permitted_operating_modes: ["acquire_only", "closed_loop_stimulation"];
+  }
+
+  policy_jurisdiction_matrix {
+    regions: [
+      {
+        id: "US-FDA-CLINICAL-RESEARCH";
+        data_residency: "US_ONLY";
+        export_constraints: ["no_raw_identifier_export", "de_identified_streams_only"];
+        approval_status: "INVESTIGATIONAL_DEVICE";
+      },
+      {
+        id: "EU-EEG-RESEARCH";
+        data_residency: "EU_ONLY";
+        export_constraints: ["pseudonymized_subject_ids", "no_cross_border_raw_signals"];
+        approval_status: "RESEARCH_GRADE";
+      }
+    ];
+  }
+
+  quant_math_constraints {
+    # Example: enforce deterministic, policy-safe quantifiable constraints.
+    # (Expressions are interpreted by ALN-aware tooling, not by Copilot itself.)
+
+    constraint "safe_temperature" {
+      statement: "forall t: time_ms. headband_temp_c(t) <= max_headset_surface_temp_c";
+      severity: "critical";
+    }
+
+    constraint "current_limit" {
+      statement: "forall c: stimulation_event. c.current_ma <= max_stimulation_current_ma";
+      severity: "critical";
+    }
+
+    constraint "emergency_latency" {
+      statement: "forall e: emergency_trigger. shutdown_completed_ms(e) - e.timestamp_ms <= emergency_shutdown_latency_ms";
+      severity: "critical";
+    }
+
+    constraint "jurisdictional_export" {
+      statement: "forall r: recording, j: jurisdiction. if r.region == j.id then exported_payload(r) satisfies j.export_constraints";
+      severity: "high";
+    }
+  }
+
+  ci_integration {
+    github_workflow_file: ".github/workflows/firmware-ci.yml";
+
+    build_matrix: {
+      toolchains: [
+        "arm-none-eabi-gcc-13",
+        "llvm-mingw-16",
+        "rust-embedded-1.83"
+      ];
+      targets: [
+        "mcu_nrf5340",
+        "dsp_sharc_plus",
+        "fpga_artix7"
+      ];
+    };
+
+    # Explicitly exclude Python from the pipeline
+    runtime_exclusions: [
+      "python2",
+      "python3",
+      "pip",
+      "virtualenv",
+      "conda"
+    ];
+
+    jobs {
+      job "build_and_unit_test" {
+        runs_on: "ubuntu-latest";
+        steps: [
+          "checkout_repo",
+          "install_rust_toolchain",
+          "install_c_compilers",
+          "install_fpga_toolchain",
+          "run_rust_unit_tests",
+          "run_c_unit_tests",
+          "synthesize_fpga_signals",
+          "package_firmware_artifacts"
+        ];
+        success_criteria: [
+          "all_tests_pass",
+          "fpga_timing_closure_met",
+          "binary_size_within_limits"
+        ];
+      }
+
+      job "virtual_hardware_simulation" {
+        runs_on: "ubuntu-latest";
+        needs: ["build_and_unit_test"];
+        steps: [
+          "load_virtual_twin e: eeg_bci_headset_v1",
+          "attach_firmware_artifacts",
+          "run_signal_acquisition_scenarios",
+          "inject_fault_conditions",
+          "validate_quant_math_constraints"
+        ];
+        success_criteria: [
+          "no_constraint_violations",
+          "no_unbounded_current_or_temperature",
+          "all_emergency_shutdown_paths_exercised"
+        ];
+      }
+    }
+  }
+
+  audit_and_observability {
+    qos_signals: [
+      "pipeline_success_rate",
+      "mean_time_to_recover_ms",
+      "firmware_update_failure_rate",
+      "stimulation_command_jitter_ms"
+    ];
+
+    dashboards: [
+      {
+        name: "BCI Safety and QoS";
+        provider: "actions_dashboard";
+        metrics: [
+          "ci_success_rate",
+          "ci_duration_ms",
+          "constraint_violation_count",
+          "emergency_shutdown_coverage"
+        ];
+      }
+    ];
+
+    evidence_retention {
+      logs_days: 365;
+      artifacts_days: 365;
+      regulatory_reports_years: 10;
+    };
+  }
+}
+    """;
+  }
+}

@@ -1,0 +1,43 @@
+name: Godot Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - '**/*.godot'
+      - '**/*.tres'
+      - '**/*.tscn'
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure shell scripts executable
+        run: |
+          chmod +x .aln/cli/firewall-apply.sh || true
+          chmod +x .aln/run-tests.sh || true
+      - name: Install dependencies (jq)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run ALN firewall diagnostic for Godot
+        run: |
+          set -o pipefail
+          ./.aln/cli/firewall-apply.sh --ci-fail
+
+      - name: Summarize Godot LSP diagnostics
+        if: failure()
+        run: |
+          echo "::group::Godot LSP / Firewall remediation summary"
+          echo "One or more Godot LSP / firewall policy checks failed."
+          echo "Common fixes:"
+          echo "  - Ensure Godot editor and VS Code Godot Tools share the same LSP port (per Policy.GodotLSPStandard_v1)."
+          echo "  - Run the ALN test harness locally:"
+          echo "      pwsh -File .aln/run-tests.ps1"
+          echo "    or"
+          echo "      chmod +x .aln/run-tests.sh .aln/tools/validate-aln.sh && ./.aln/run-tests.sh"
+          echo "  - Follow GODOT_LSP_OPS.md and GODOT_LSP_FIX.md to update project and IDE configs."
+          echo "::endgroup::"

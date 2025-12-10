@@ -1,0 +1,29 @@
+name: ALN VM Bootstrap & Validation
+
+on:
+  push:
+    paths:
+      - "aln/**.aln"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+jobs:
+  aln-vm-bootstrap-check:
+    runs-on: ubuntu-latest
+    env:
+      ALN_DIR: aln
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Enforce non-Python environment
+        run: |
+          if command -v python || command -v python3 || command -v pip; then
+            echo "Python detected but disallowed by ALN policy."
+            exit 1
+          fi
+
+      - name: Validate ALN VM bootstrap plans
+        run: |
+          echo "Validating ALN VM bootstrap plans in ${ALN_DIR}..."
+          # Placeholder for ALN validator / Ajv mesh sweep

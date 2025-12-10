@@ -1,0 +1,472 @@
+filename: copilot-aln-vm-bootstrap-and-governance.aln
+destination-folder: /aln/github_copilot/
+
+aln_document {
+  header {
+    aln_version: "1.0";
+    qpu_math_profile: "QPU.Math+";
+    title: "VM Bootstrap, Device Twins, Repo Policy, Telemetry, and Firmware Lanes";
+    design_scope: [
+      "GitHub-hosted runners (no Python)",
+      "Virtual hardware device twin fleets",
+      "Copilot edit governance for repos",
+      "ALN artifact telemetry and retention",
+      "Staged firmware update lanes with crypto checks"
+    ];
+    python_exclusion_policy: "No Python runtime or libraries in any execution_target.";
+    copilot_alignment_note: "Provides Copilot with deterministic ALN contracts for VMs, twins, repo edits, telemetry, and firmware operations on GitHub-hosted infrastructure.";
+  }
+
+  ###################################################################
+  # 1) VM bootstrap plan for GitHub-hosted runners (no Python)
+  ###################################################################
+  section "vm_bootstrap_plan_for_github_hosted_runners" {
+    text
+    text_block: """
+aln_vm_bootstrap_plan "github_hosted_runner_v1" {
+  target_runners: [
+    "ubuntu-latest",
+    "ubuntu-24_04",
+    "windows-latest",
+    "macos-latest"
+  ];
+
+  phases {
+    phase "provision_vm" {
+      description: "Allocate fresh ephemeral VM or container runner with clean disk image.";
+      steps: [
+        "allocate_ephemeral_vm",
+        "attach_ephemeral_storage",
+        "configure_network_and_dns"
+      ];
+      quant_math_constraints {
+        constraint "vm_provision_time" {
+          statement: "forall r: runner. provision_time_ms(r) <= 20000";
+          severity: "medium";
+        }
+      }
+    }
+
+    phase "harden_base_image" {
+      description: "Apply security hardening and isolation prior to user job steps.";
+      steps: [
+        "apply_security_patches",
+        "enforce_non_root_runner_user",
+        "lock_down_inbound_ports_except_essential",
+        "enable_process_and_syscall_sandboxing"
+      ];
+      quant_math_constraints {
+        constraint "network_exposure_limit" {
+          statement: "forall r: runner. open_inbound_ports_count(r) <= 3";
+          severity: "high";
+        }
+      }
+    }
+
+    phase "toolchain_hydration" {
+      description: "Install and cache non-Python toolchains and CLIs.";
+      allowed_languages: [
+        "c",
+        "cpp",
+        "rust",
+        "zig",
+        "go",
+        "typescript",
+        "javascript",
+        "wasm32_wasi",
+        "verilog",
+        "vhdl"
+      ];
+      runtime_exclusions: [
+        "python2",
+        "python3",
+        "pip",
+        "conda",
+        "virtualenv"
+      ];
+      steps: [
+        "install_clang_and_gcc",
+        "install_rust_toolchain",
+        "install_zig_toolchain",
+        "install_go_toolchain",
+        "install_nodejs_and_package_manager",
+        "install_wasm32_wasi_tools",
+        "hydrate_compiler_and_linker_caches"
+      ];
+      quant_math_constraints {
+        constraint "toolchain_duration" {
+          statement: "forall r: runner. toolchain_install_time_ms(r) <= 15000";
+          severity: "medium";
+        }
+      }
+    }
+
+    phase "repo_bootstrap" {
+      description: "Prepare repository workspace, caches, and ALN context.";
+      steps: [
+        "checkout_repository",
+        "restore_build_cache",
+        "restore_test_cache",
+        "load_repo_aln_contracts",
+        "validate_repo_policy_contracts",
+        "expose_aln_context_to_jobs"
+      ];
+      quant_math_constraints {
+        constraint "workspace_ready_time" {
+          statement: "forall j: job. workspace_ready_time_ms(j) <= 10000";
+          severity: "medium";
+        }
+      }
+    }
+
+    phase "job_execution_guardrails" {
+      description: "Enforce resource ceilings and non-Python execution.";
+      steps: [
+        "enforce_cpu_quota_per_job",
+        "enforce_memory_quota_per_job",
+        "enforce_disk_quota_per_job",
+        "block_python_binaries_and_interpreters",
+        "record_telemetry_pipeline_signals"
+      ];
+      quant_math_constraints {
+        constraint "cpu_and_memory_headroom" {
+          statement: "forall j: job. cpu_peak_pct(j) <= 90 && memory_peak_pct(j) <= 90";
+          severity: "medium";
+        }
+
+        constraint "python_exclusion" {
+          statement: "forall p: process. not (p.binary_name in ['python', 'python2', 'python3'])";
+          severity: "critical";
+        }
+      }
+    }
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 2) Device twin schema for a virtual hardware fleet
+  ###################################################################
+  section "device_twin_schema_for_virtual_hardware_fleet" {
+    text
+    text_block: """
+aln_schema "virtual_hardware_device_twin_fleet_v1" {
+  description: "Schema definition for modeling a fleet of virtual hardware device twins running under Virtual-Hardwire control.";
+  entities {
+
+    entity "device_twin" {
+      fields: {
+        twin_id: "string";                  # Unique ID for twin
+        fleet_id: "string";                 # Fleet grouping identifier
+        physical_device_sku: "string";      # Maps to real or reference hardware
+        class: "enum[vm, edge_node, sensor, actuator, gateway, smart_city_node]";
+        repo_binding: {
+          github_org: "string";
+          github_repo: "string";
+          main_branch: "string";
+        };
+        execution_targets: "array[string]"; # e.g. kvm_guest, wasm32_wasi, fpga_bitstream
+        io_profile: {
+          cpu_arch: "array[string]";        # e.g. ["x86_64", "arm64"]
+          vcpu_count: "int";
+          memory_gb: "float";
+          storage_gb: "float";
+          network_bandwidth_mbps: "float";
+          peripherals: "array[string]";     # e.g. ["i2c0", "spi1", "can0"]
+        };
+        safety_envelope: {
+          max_cpu_utilization_pct: "float";
+          max_memory_utilization_pct: "float";
+          max_power_watts: "float";
+          max_temp_c: "float";
+          emergency_shutdown_latency_ms: "int";
+        };
+        lifecycle_state: "enum[draft, simulated, staged, production, retired]";
+        policy_jurisdiction_matrix: {
+          regions: "array[jurisdiction_region]";
+        };
+      }
+    }
+
+    entity "jurisdiction_region" {
+      fields: {
+        id: "string";                       # e.g. EU_REGION, US_REGION
+        data_residency: "enum[GLOBAL, EU_ONLY, US_ONLY, REGION_AWARE]";
+        export_constraints: "array[string]";
+        approval_status: "enum[RESEARCH, PRODUCTION, INVESTIGATIONAL]";
+      }
+    }
+
+    entity "fleet_link" {
+      fields: {
+        fleet_id: "string";
+        twin_ids: "array[string]";
+        description: "string";
+      }
+    }
+  }
+
+  quant_math_constraints {
+    constraint "fleet_density_bound" {
+      statement: "forall f: fleet_link. count(f.twin_ids) <= 10000";
+      severity: "medium";
+    }
+
+    constraint "twin_resource_limits" {
+      statement: "forall d: device_twin. d.io_profile.vcpu_count >= 1 && d.io_profile.memory_gb >= 0.5";
+      severity: "medium";
+    }
+
+    constraint "emergency_shutdown_latency" {
+      statement: "forall d: device_twin. d.safety_envelope.emergency_shutdown_latency_ms <= 5000";
+      severity: "high";
+    }
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 3) Copilot edit plan to enforce repo policy contracts
+  ###################################################################
+  section "copilot_edit_plan_for_repo_policy_contracts" {
+    text
+    text_block: """
+aln_copilot_edit_plan "enforce_repo_policy_contracts_v1" {
+  repo_scope: {
+    github_org: "*";
+    github_repo: "*";
+  };
+
+  required_artifacts: [
+    "aln_repo_policy_contract",
+    "aln_vm_bootstrap_plan",
+    "aln_telemetry_pipeline_spec"
+  ];
+
+  allowed_operations: [
+    "add_missing_policy_contract_files",
+    "tighten_security_invariants",
+    "add_or_refine_quant_math_constraints",
+    "align_ci_workflows_with_policy_contracts",
+    "add_virtual_hardware_twin_definitions"
+  ];
+
+  disallowed_operations: [
+    "delete_policy_contract_files",
+    "reduce_severity_of_safety_constraints",
+    "widen_data_export_constraints",
+    "enable_python_in_restricted_runtimes"
+  ];
+
+  validation_steps: [
+    "parse_aln_documents",
+    "validate_against_aln_schema",
+    "check_for_required_sections",
+    "simulate_ci_workflow_impact",
+    "compute_policy_diff_and_regressions"
+  ];
+
+  success_criteria: [
+    "aln_static_validation_passes",
+    "no_policy_regressions_detected",
+    "no_reduction_in_security_invariant_coverage",
+    "no_python_executables_added_to_ci"
+  ];
+
+  quant_math_constraints {
+    constraint "policy_coverage" {
+      statement: "forall r: repo. coverage_of_repo_policy_contracts(r) >= 0.98";
+      severity: "high";
+    }
+
+    constraint "edit_safety" {
+      statement: "forall e: copilot_edit. risk_score(e) <= 0.2";
+      severity: "high";
+    }
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 4) Telemetry pipeline fields and retention for ALN artifacts
+  ###################################################################
+  section "telemetry_pipeline_for_aln_artifacts" {
+    text
+    text_block: """
+aln_telemetry_pipeline_spec "aln_artifact_telemetry_v1" {
+  scope: "aln_documents_and_ci_executions";
+
+  fields {
+    core_fields: [
+      "aln_document_id",
+      "aln_document_version",
+      "repo_id",
+      "repo_name",
+      "github_org",
+      "workflow_id",
+      "workflow_run_id",
+      "job_id",
+      "runner_id",
+      "twin_id",
+      "timestamp_utc"
+    ];
+    performance_fields: [
+      "vm_boot_time_ms",
+      "ci_queue_time_ms",
+      "ci_duration_ms",
+      "cpu_peak_pct",
+      "memory_peak_mb",
+      "disk_io_kb",
+      "network_io_kb"
+    ];
+    reliability_fields: [
+      "workflow_success_flag",
+      "constraint_violation_count",
+      "policy_violation_count",
+      "retries_count"
+    ];
+    security_fields: [
+      "secrets_usage_flag",
+      "unencrypted_secret_detection_flag",
+      "unexpected_outbound_connection_flag"
+    ];
+  }
+
+  retention {
+    logs_days: 90;
+    metrics_days: 365;
+    constraint_violations_days: 365;
+    audit_trails_years: 7;
+  }
+
+  anonymization_rules {
+    rules: [
+      "strip_user_identifiers",
+      "hash_repo_ids_with_salt",
+      "truncate_ip_addresses_to_prefix",
+      "mask_secrets_and_tokens"
+    ];
+  }
+
+  quant_math_constraints {
+    constraint "telemetry_completeness" {
+      statement: "forall w: workflow_run. telemetry_record_coverage(w) >= 0.99";
+      severity: "medium";
+    }
+
+    constraint "retention_enforcement" {
+      statement: "forall e: telemetry_entry. delete_time(e) - create_time(e) <= max_retention(e.kind)";
+      severity: "high";
+    }
+  }
+}
+    """;
+  }
+
+  ###################################################################
+  # 5) Firmware update lane with staged rollback and crypto checks
+  ###################################################################
+  section "firmware_update_lane_with_staged_rollback" {
+    text
+    text_block: """
+aln_firmware_update_lane "virtual_hardware_firmware_lane_v1" {
+  lane_id: "VH-FW-LANE-001";
+  fleet_id: "VIRTUAL-HARDWARE-FLEET-DEFAULT";
+  supported_classes: ["edge_node", "sensor", "actuator", "gateway"];
+
+  rollout_rings: [
+    {
+      id: "ring_canary";
+      description: "1% of fleet, low-risk devices.";
+      max_concurrent_pct: 1.0;
+      soak_time_minutes: 60;
+    },
+    {
+      id: "ring_staged";
+      description: "Up to 25% of fleet.";
+      max_concurrent_pct: 25.0;
+      soak_time_minutes: 240;
+    },
+    {
+      id: "ring_general";
+      description: "Remainder of fleet.";
+      max_concurrent_pct: 100.0;
+      soak_time_minutes: 1440;
+    }
+  ];
+
+  cryptographic_checks {
+    signature_scheme: "ed25519";
+    hash_algorithm: "sha3_256";
+    required_metadata_fields: [
+      "firmware_version",
+      "build_timestamp",
+      "git_commit_hash",
+      "twin_id",
+      "lane_id"
+    ];
+
+    steps: [
+      "verify_firmware_hash",
+      "verify_firmware_signature",
+      "verify_metadata_integrity",
+      "match_twin_id_and_fleet_id"
+    ];
+  }
+
+  staged_rollout_logic {
+    max_downtime_seconds_per_device: 60;
+
+    pre_update_checks: [
+      "battery_level_above_threshold",
+      "device_online_and_reachable",
+      "no_active_emergency_state",
+      "sufficient_storage_for_dual_bank"
+    ];
+
+    update_sequence: [
+      "download_firmware_package",
+      "verify_cryptographic_integrity",
+      "write_to_inactive_bank",
+      "update_bootloader_slot",
+      "reboot_to_new_firmware",
+      "run_post_update_self_test"
+    ];
+
+    rollback_triggers: [
+      "self_test_failure",
+      "heartbeat_missing",
+      "constraint_violation_detected"
+    ];
+
+    rollback_sequence: [
+      "revert_bootloader_slot",
+      "reboot_to_previous_firmware",
+      "flag_device_for_investigation",
+      "throttle_or_pause_ring_rollout"
+    ];
+  }
+
+  quant_math_constraints {
+    constraint "max_downtime" {
+      statement: "forall d: device. downtime_seconds(d) <= max_downtime_seconds_per_device";
+      severity: "high";
+    }
+
+    constraint "cryptographic_integrity" {
+      statement: "forall f: firmware_image. valid_signature(f) == true && valid_hash(f) == true";
+      severity: "critical";
+    }
+
+    constraint "ring_advancement_criteria" {
+      statement: "forall r: rollout_ring. violation_rate(r) <= 0.01 before advance_to_next_ring(r)";
+      severity: "high";
+    }
+  }
+}
+    """;
+  }
+}

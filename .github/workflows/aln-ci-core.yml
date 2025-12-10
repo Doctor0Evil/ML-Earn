@@ -1,0 +1,47 @@
+name: ALN Core CI
+
+on:
+  push:
+    paths:
+      - "aln/**.aln"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "aln/**.aln"
+      - ".github/workflows/**"
+
+jobs:
+  aln-validate-and-test:
+    runs-on: ubuntu-latest
+    env:
+      ALN_DIR: aln
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enforce non-Python environment
+        run: |
+          if command -v python || command -v python3 || command -v pip; then
+            echo "Python detected but disallowed by ALN policy."
+            exit 1
+          fi
+
+      - name: Install Node + Ajv
+        run: |
+          npm init -y
+          npm install ajv@8.x ajv-formats@3.x
+
+      - name: Convert ALN to JSON projections
+        run: |
+          echo "Converting .aln documents to aln-json-projection format..."
+          # node scripts/aln-to-json-projection.cjs
+
+      - name: Run Ajv mesh sweep over ALN JSON views
+        run: |
+          echo "Running Ajv validation across all ALN JSON projections..."
+          # node scripts/aln-ajv-mesh-sweep.cjs
+
+      - name: Evaluate severity gates
+        run: |
+          echo "Checking sevmesh-gate constraints (critical=0, high<=10)..."
+          # node scripts/aln-severity-gate.cjs

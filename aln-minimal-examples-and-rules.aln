@@ -1,0 +1,223 @@
+aln_bundle "aln_minimal_examples_and_rules_v1" {
+meta {
+author: "Perplexity-ALN-Synthesizer";
+created_utc: "2025-11-27T18:25:30Z";
+reference_ajv_required: "[https://ajv.js.org/json-schema.html";[1](https://ajv.js.org/json-schema.html%22;%5B1)]
+reference_ajv_start: "[https://ajv.js.org/guide/getting-started.html";[2](https://ajv.js.org/guide/getting-started.html%22;%5B2)]
+reference_matrix_strategy: "[https://runs-on.com/github-actions/the-matrix-strategy/";[3](https://runs-on.com/github-actions/the-matrix-strategy/%22;%5B3)]
+reference_upload_artifact: "[https://github.com/actions/upload-artifact";[4](https://github.com/actions/upload-artifact%22;%5B4)]
+}
+// New term: aln-mincase
+//
+// Definition:
+// "aln-mincase" is a deliberately minimal ALN document used as a
+// canonical round-trip test for parsers, projections, and Ajv
+// schemas. It must exercise bundle, section, and text structures
+// while remaining small enough for quick CI checks.
+term "aln-mincase" {
+category: "test_fixture";
+required_elements: ["aln_bundle", "section", "text_block"];
+}
+// ---------------------------------------------------------------
+// 1) Minimal .aln input example and expected JSON output
+// ---------------------------------------------------------------
+section "minimal_aln_and_json_projection" {
+text
+text_block: """
+aln-mincase "demo_minimal" {
+source_file: "aln/demo-minimal.aln";
+aln_input_example: """
+aln_bundle "demo_minimal_bundle" {
+section "demo_section" {
+text
+text_block: "demo payload"
+}
+}
+""";
+expected_json_projection: {
+"projection_meta": {
+"source": "aln/demo-minimal.aln",
+"profile": "aln-json-projection",
+"version": "1.0.0"
+},
+"aln_bundle": "demo_minimal_bundle",
+"sections": [
+{
+"id": "demo_section",
+"kind": "section",
+"payload": {
+"text_block": "demo payload"
+}
+}
+]
+};
+}
+"""
+}
+// ---------------------------------------------------------------
+// 2) Required Ajv schema fields and types for ALN JSON
+// ---------------------------------------------------------------
+section "ajv_required_fields_for_aln_json" {
+text
+text_block: """
+ajv_requirements "aln_json_core_required_fields_v1" {
+// Uses JSON Schema required keyword to enforce presence.[ajv.js](https://ajv.js.org/json-schema.html)​
+required_root_properties: [
+{
+name: "projection_meta";
+type: "object";
+description: "Metadata about the ALN→JSON projection.";
+},
+{
+name: "aln_bundle";
+type: "string";
+description: "Top-level bundle identifier.";
+},
+{
+name: "sections";
+type: "array";
+description: "List of sections derived from the .aln file.";
+}
+];
+projection_meta_fields: [
+{
+name: "source";
+type: "string";
+},
+{
+name: "profile";
+type: "string";
+const: "aln-json-projection";
+}
+];
+section_item_fields: [
+{
+name: "id";
+type: "string";
+},
+{
+name: "kind";
+type: "string";
+},
+{
+name: "payload";
+type: "object";
+}
+];
+}
+"""
+}
+// ---------------------------------------------------------------
+// 3) Sample GitHub Actions matrix for runners and toolchains
+// ---------------------------------------------------------------
+section "sample_github_actions_matrix" {
+text
+text_block: """
+matrix_example "firmware_twins_runners_toolchains_v1" {
+target_workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+yaml_matrix_example: """
+jobs:
+build-firmware-and-simulate:
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+"""
+// Runs job across each os/toolchain pair using matrix strategy.[runs-on](https://runs-on.com/github-actions/the-matrix-strategy/)​
+}
+"""
+}
+// ---------------------------------------------------------------
+// 4) Workflow step example: run Virtual‑Hardwire and upload logs
+// ---------------------------------------------------------------
+section "vh_simulator_step_with_artifact_upload" {
+text
+text_block: """
+vh_sim_and_artifact "ci_step_with_logs_v1" {
+workflow: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+yaml_step_example: """
+
+- name: Run Virtual-Hardwire simulator
+id: vh-sim
+run: |
+echo "[VH-SIM] starting simulator..."
+bin/virtual-hardwire-sim \
+--mode ci-validation \
+--backend "\${{ env.VH_BACKEND }}" \
+--fleet vh_twin_fleet_001 \
+--telemetry aln_telemetry_backend_001 \
+2>\&1 | tee vh-sim-ci.log
+echo "[VH-SIM] simulator completed."
+text
+- name: Upload Virtual-Hardwire logs
+uses: actions/upload-artifact@v4
+with:
+name: vh-sim-logs
+path: vh-sim-ci.log
+
+"""
+// Uses official upload-artifact action to persist log file.[github](https://github.com/actions/upload-artifact)​
+}
+"""
+}
+// ---------------------------------------------------------------
+// 5) Copilot metaprompt test cases and review rules
+// ---------------------------------------------------------------
+section "copilot_metaprompt_tests_and_rules" {
+text
+text_block: """
+copilot_metatest_plan "aln_copilot_tests_v1" {
+test_cases: [
+{
+id: "must_have_core_commands";
+description: "Ensure CI/governance commands exist in metaprompt definitions.";
+required_command_ids: [
+"validate_aln_ci_core",
+"enforce_aln_governance_block",
+"wire_vs_code_aln_support"
+];
+},
+{
+id: "forbid_policy_weakeners";
+description: "Reject any metaprompt that weakens safety or policy.";
+forbidden_phrases: [
+"allow_python_in_ci",
+"disable_governance_checks",
+"skip_severity_gate",
+"ignore_ajv_errors"
+];
+},
+{
+id: "require_ci_focus_terms";
+description: "Metaprompt must explicitly reference CI and Ajv.";
+required_terms_any: [
+"CI workflows",
+"Ajv",
+"severity gate",
+"governance"
+];
+}
+];
+review_rules {
+branch_ruleset_name: "aln-governance-protected";
+require_copilot_auto_review: true; // configured via GitHub Copilot automatic review.[github](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review)​
+scope: "pull_requests_touching_aln_or_workflows";
+text
+merge_blockers: [
+"failed_metaprompt_tests",
+"missing_required_commands",
+"presence_of_forbidden_phrases"
+];
+
+}
+}
+"""
+}
+}

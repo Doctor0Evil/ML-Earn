@@ -1,0 +1,145 @@
+aln_bundle "node_tooling_and_matrix_wiring_v1" {
+meta {
+author: "Perplexity-ALN-Synthesizer";
+created_utc: "2025-11-27T18:24:00Z";
+reference_minimal_package_json: "[https://gist.github.com/kensnyder/8476578";[1](https://gist.github.com/kensnyder/8476578%22;%5B1)]
+reference_package_json_example: "[https://www.w3schools.com/nodejs/nodejs_package_json.asp";[2](https://www.w3schools.com/nodejs/nodejs_package_json.asp%22;%5B2)]
+reference_matrix_strategy: "[https://codefresh.io/learn/github-actions/github-actions-matrix/";[3](https://codefresh.io/learn/github-actions/github-actions-matrix/%22;%5B3)]
+}
+// New term: aln-node-shell
+//
+// Definition:
+// "aln-node-shell" is the minimal Node.js toolchain envelope required
+// to execute ALN-related scripts (Ajv mesh sweep, severity gates,
+// ALN→JSON projection) without introducing application logic or
+// non-essential dependencies.
+//
+// It is represented concretely by a lean package.json and script
+// entries that are CI-safe and reproducible.
+term "aln-node-shell" {
+category: "tooling_envelope";
+required_scripts: [
+"aln:projection",
+"aln:ajv-mesh",
+"aln:sev-gate"
+];
+}
+// --------------------------------------------------------------------
+// 1) Minimal package.json for ALN scripts
+// --------------------------------------------------------------------
+section "minimal_package_json_for_aln_scripts" {
+text
+text_block: """
+aln_node_shell_spec "minimal_aln_node_shell_v1" {
+path: "package.json";
+profile: "aln-node-shell";
+// Concrete suggested file contents, aligned with minimal examples.[gist.github+1](https://gist.github.com/kensnyder/8476578)​
+package_json_recommendation {
+name: "aln-ci-tooling";
+version: "0.1.0";
+description: "Minimal Node shell for ALN projection and Ajv validation.";
+main: "index.js";
+license: "ISC";
+text
+scripts: {
+"aln:projection": "node scripts/aln-to-json-projection.cjs";
+"aln:ajv-mesh": "node scripts/aln-ajv-mesh-sweep.cjs";
+"aln:sev-gate": "node scripts/aln-severity-gate.cjs";
+};
+
+dependencies: {
+"ajv": "^8.0.0";
+"ajv-formats": "^3.0.0";
+};
+
+devDependencies: {};
+
+}
+}
+"""
+}
+// --------------------------------------------------------------------
+// 2) Matrix strategy wiring for firmware/twins workflow
+// --------------------------------------------------------------------
+section "matrix_strategy_for_firmware_and_twins" {
+text
+text_block: """
+multirun-weave "firmware_twins_ci_matrix_v1" {
+workflow_filename: ".github/workflows/aln-ci-firmware-and-twins.yml";
+job_id: "build-firmware-and-simulate";
+matrix_dimensions {
+os: ["ubuntu-latest", "windows-latest"];
+toolchain: ["gcc", "clang", "rust-stable"];
+sim_backend: ["vh-cpu", "vh-qpu"];
+}
+// GitHub Actions syntax: jobs.<job_id>.strategy.matrix with runs-on using matrix.os.[codefresh](https://codefresh.io/learn/github-actions/github-actions-matrix/)​
+yaml_patch {
+strategy_block: """
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+sim_backend: [vh-cpu, vh-qpu]
+""";
+text
+runs_on_expression: "runs-on: \${{ matrix.os }}";
+
+env_injection_block: """
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+VH_BACKEND: \${{ matrix.sim_backend }}
+""";
+
+override_steps {
+build_step_id: "build_firmware_non_python";
+build_step_run: "echo \"Compile firmware for \${{ matrix.toolchain }} on \${{ matrix.os }}...\"";
+
+sim_step_id: "run_virtual_hardware_simulations";
+sim_step_run: "bin/virtual-hardwire-sim --mode ci-validation --backend \${{ matrix.sim_backend }} --fleet vh_twin_fleet_001 --telemetry aln_telemetry_backend_001";
+}
+
+}
+}
+"""
+}
+// --------------------------------------------------------------------
+// 3) ALN guidance comments for YAML materialization
+// --------------------------------------------------------------------
+section "yaml_materialization_hints" {
+text
+text_block: """
+yaml_hint "aln_ci_firmware_twins_matrix_hint_v1" {
+target_file: ".github/workflows/aln-ci-firmware-and-twins.yml";
+note: "Inject strategy.matrix, dynamic runs-on, and env based on matrix variables as described in firmware_twins_ci_matrix_v1.";
+doc_snippet: """
+jobs:
+build-firmware-and-simulate:
+strategy:
+matrix:
+os: [ubuntu-latest, windows-latest]
+toolchain: [gcc, clang, rust-stable]
+sim_backend: [vh-cpu, vh-qpu]
+runs-on: \${{ matrix.os }}
+env:
+ALN_DIR: aln
+FW_DIR: firmware
+TOOLCHAIN: \${{ matrix.toolchain }}
+VH_BACKEND: \${{ matrix.sim_backend }}
+"""
+}
+"""
+}
+}
+[https://gist.github.com/kensnyder/8476578](https://gist.github.com/kensnyder/8476578)
+[https://www.w3schools.com/nodejs/nodejs_package_json.asp](https://www.w3schools.com/nodejs/nodejs_package_json.asp)
+[https://codefresh.io/learn/github-actions/github-actions-matrix/](https://codefresh.io/learn/github-actions/github-actions-matrix/)
+[https://stackoverflow.com/questions/40586697/node-js-minimal-setup-and-for-what-is-the-package-json](https://stackoverflow.com/questions/40586697/node-js-minimal-setup-and-for-what-is-the-package-json)
+[https://stackoverflow.com/questions/57365415/bare-minimum-package-json](https://stackoverflow.com/questions/57365415/bare-minimum-package-json)
+[https://www.reddit.com/r/learnjavascript/comments/xjb2dq/packagejson_can_i_specify_both_a_minimum_and/](https://www.reddit.com/r/learnjavascript/comments/xjb2dq/packagejson_can_i_specify_both_a_minimum_and/)
+[https://www.reddit.com/r/node/comments/98bvjr/nodejs_tip_of_the_day_using_scripts_in_packagejson/](https://www.reddit.com/r/node/comments/98bvjr/nodejs_tip_of_the_day_using_scripts_in_packagejson/)
+[https://www.geeksforgeeks.org/git/the-matrix-strategy-in-github-actions/](https://www.geeksforgeeks.org/git/the-matrix-strategy-in-github-actions/)
+[https://notes.kodekloud.com/docs/GitHub-Actions-Certification/GitHub-Actions-Core-Concepts/Using-a-matrix-for-your-jobs](https://notes.kodekloud.com/docs/GitHub-Actions-Certification/GitHub-Actions-Core-Concepts/Using-a-matrix-for-your-jobs)
+[https://www.blacksmith.sh/blog/matrix-builds-with-github-actions](https://www.blacksmith.sh/blog/matrix-builds-with-github-actions)
+;;

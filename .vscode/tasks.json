@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run ALN Test Harness",
+      "type": "shell",
+      "command": "bash .aln/run-tests.sh || pwsh -ExecutionPolicy Bypass -File .aln/run-tests.ps1",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+name: ALN Telemetry Export
+
+on:
+  workflow_run:
+    workflows:
+      - "ALN VM Bootstrap & Validation"
+      - "Virtual Hardware Device Twin CI"
+    types: [completed]
+
+jobs:
+  export-aln-telemetry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect ALN and CI metrics
+        run: |
+          echo "Collecting ALN document metadata and CI signals..."
+          echo "Workflow run ID: ${{ github.run_id }}"
+          echo "Workflow status: ${{ github.event.workflow_run.conclusion }}"
+          # Populate fields like aln_document_id, workflow_run_id, cpu_peak_pct
+
+      - name: Push telemetry to backend
+        run: |
+          echo "Send anonymized telemetry to ALN/Virtual-Hardwire service..."
+          # POST to telemetry endpoint with ALN metrics

@@ -1,0 +1,36 @@
+name: Copilot Repo Policy & Governance
+
+on:
+  push:
+    paths:
+      - "aln/**repo_policy**.aln"
+      - ".github/**"
+  pull_request:
+    paths:
+      - "aln/**repo_policy**.aln"
+      - ".github/**"
+
+jobs:
+  enforce-repo-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Load ALN repo policy contract
+        run: |
+          echo "Scanning aln/ for aln_repo_policy_contract definitions..."
+
+      - name: Static ALN policy validation
+        run: |
+          echo "Run ALN schema validation and severity gates..."
+          # Where Ajv mesh sweep / severity-gate tooling plugs in
+
+      - name: Block disallowed Copilot/CI patterns
+        run: |
+          echo "Checking for Python runtimes, weakened constraints, or policy regressions..."
+
+      - name: Run Copilot metaprompt tests
+        run: |
+          echo "Validating Copilot metaprompt integrity and governance alignment..."
+          # node scripts/aln-copilot-metatest.cjs

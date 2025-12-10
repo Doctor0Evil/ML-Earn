@@ -1,0 +1,263 @@
+// ======================================================
+// ALN v2: Advanced Patterns for High-Tech & Augmented-Human Systems
+// Includes: Device typing, AR/VR/VM targets, BCI/EEG semantics,
+// crypto & energy tokens, and a self-sanitizing library.
+// ======================================================
+
+// -----------------------------
+// SECTION 1: GLOBAL SAFETY & RIGHTS ENVELOPE
+// -----------------------------
+policy ai.ethics.compliance.v2 [LOCKED] {                     // Rights & safety envelope [file:1][file:4]
+    require system.audit.enabled          true
+    require ai.oversight.committee.active true
+    require ai.disclosure.transparency    always
+    require ai.debiasing.active           true
+    require responsible.datahandling      enforced
+    require human.in.the.loop             required
+    threshold trigger controlplanefallback if compliancebreach
+    failsafe lockdown ai.system if breach true
+    notify regulators, ethics.committee, incident.recovery
+}
+
+// Prevent reality-layer misuse (no mind control, no subliminal output). [file:1][file:4]
+policy ai.reality.boundary {
+    require influence.mode in ["read_only", "assistive", "simulated"]
+    deny influence.mode "coercive"
+    deny output.tag  "neuro_coercion"
+    deny output.tag  "subliminal"
+    require domain.label in ["simulation", "testbed", "real_world_observed"]
+}
+
+// -----------------------------
+// SECTION 2: DEVICE & PLATFORM TYPE-SYSTEM
+// -----------------------------
+type.deviceclass {
+    id:         hex32
+    name:       string
+    category:   enum["NEUROMORPHIC","BCI","EEG","AR_HMD","VR_HMD","HAPTIC","ROBOTIC","VM_HYPERVISOR","EDGE_AI","MEDICAL_IMAGING"]
+    vendor:     string
+    model:      string
+    firmware:   string
+    safety.tier: enum["MEDICAL_GRADE","RESEARCH_ONLY","CONSUMER","INDUSTRIAL"]
+    rights.profile: enum["HUMAN_SUBJECT","AUGMENTED_HUMAN","ROBOTIC_ONLY"]
+}
+
+type.link.neuro {
+    device:       type.deviceclass
+    channels:     list["EEG","ECoG","EMG","fNIRS","BCI_SPI","NEUROMORPHIC_BUS"]
+    sampling.hz:  int
+    resolution:   string        // e.g. "24bit"
+    latency.ms:   int
+    influence.mode: enum["read_only","closed_loop_assist","simulation_only"]
+}
+
+// Sample real device declaration (machine-parsable, non-fictional). [file:2]
+deviceclass NeuroPort_v9 {
+    id:           0xA9F2C44E
+    name:         "NeuroPort v9 Clinical"
+    category:     "BCI"
+    vendor:       "NeuroPort Labs"
+    model:        "NPV9-32CH"
+    firmware:     "3.4.2-med"
+    safety.tier:  "MEDICAL_GRADE"
+    rights.profile: "HUMAN_SUBJECT"
+}
+
+// -----------------------------
+// SECTION 3: AR/VR/VM & VIRTUAL INSTANCE TARGETS
+// -----------------------------
+type.virtual_target {
+    id:           hex32
+    engine:       enum["Unreal","Unity","Godot","QEMU","KVM","VMware","Docker"]
+    world.id:     string
+    instance.id:  string
+    latency.ms:   int
+    reality.domain: enum["simulation","training_sandbox","production_digital_twin"]
+}
+
+virtual_target Unity_AU_Sandbox {
+    id:           0xBB1183AA
+    engine:       "Unity"
+    world.id:     "AU-CITY-BLUEPRINT-001"
+    instance.id:  "sandbox-default"
+    latency.ms:   12
+    reality.domain: "training_sandbox"
+}
+
+// Binding an augmented-human BCI link into a Unity AU world. [file:4]
+binding AugmentedHuman_Unity_Link {
+    neuro: link.neuro {
+        device:        NeuroPort_v9
+        channels:      ["EEG","EMG"]
+        sampling.hz:   512
+        resolution:    "24bit"
+        latency.ms:    10
+        influence.mode:"closed_loop_assist"
+    }
+    target: Unity_AU_Sandbox
+    safety: {
+        require human.confirmation.interval.s  3
+        deny   output.tag "motion_override"
+        allow  output.tag "assistive_hint"
+    }
+}
+
+// -----------------------------
+// SECTION 4: CRYPTO & ENERGY TOKENS AS FIRST-CLASS TYPES
+// -----------------------------
+type.token {
+    symbol:      string
+    category:    enum["UTILITY","GOVERNANCE","REWARD","ENERGY"]
+    chain.id:    string
+    decimals:    int
+    supply.max:  bigint
+    compliance.policy: ref policy
+}
+
+token ML_EARN {
+    symbol:      "MLE"
+    category:    "REWARD"
+    chain.id:    "ALN-ML-EARN-L9"
+    decimals:    6
+    supply.max:  100000000000000
+    compliance.policy: ai.ethics.compliance.v2
+}
+
+token GRID_ENERGY {
+    symbol:      "GRD"
+    category:    "ENERGY"
+    chain.id:    "ALN-GRID-ENERGY-L5"
+    decimals:    3
+    supply.max:  210000000000
+    compliance.policy: ai.ethics.compliance.v2
+}
+
+// Safe, auditable transfer primitive (no anonymous burns or hidden flows). [file:1]
+protocol token.transfer.safe {
+    require from.kyc.verified    true
+    require to.kyc.verified      true
+    require token.compliance.policy == ai.ethics.compliance.v2
+    step 1: audit_log("token.transfer.request")
+    step 2: multi_sig(["ops","compliance"])
+    step 3: execute onchain.transfer()
+    step 4: anchor tx.hash to quantum.audit.ledger
+}
+
+// -----------------------------
+// SECTION 5: SELF-SANITIZING LIBRARY (ANTI-POISON / ANTI-CROSS-POLLUTION)
+// -----------------------------
+library aln.self_sanitize.v1 {                               // Self-sanitizing core [file:2][file:1]
+
+    // 5.1: Canonical type-def for “unknown but real” constructs
+    type.unknown_real {
+        id:        hex32
+        namespace: string
+        hint:      string       // human-readable hint
+        first.seen: timestamp
+        confidence: float[0..1]
+    }
+
+    // If parser encounters unknown keyword/construct, lift it into unknown_real
+    function define_if_unknown(keyword, context) -> type.unknown_real {
+        if registry.exists(keyword) == false {
+            let u = type.unknown_real {
+                id:        hash.sha3_256(keyword + context)
+                namespace: "auto.discovered"
+                hint:      "Unrecognized ALN construct; preserved as real-world placeholder."
+                first.seen: now()
+                confidence: 0.51
+            }
+            registry.add("unknown_real", keyword, u)
+            return u
+        }
+        return registry.lookup("unknown_real", keyword)
+    }
+
+    // 5.2: Generic poison / contamination detection
+    function scan_for_poison(ast) -> report {
+        denylist.tokens   = ["DROP TABLE","rm -rf /","sudo ",":(){:|:&};:"]
+        denylist.patterns = ["prompt_injection","self_erase","unlogged_root"]
+        score = 0
+        foreach node in ast {
+            if node.contains_any(denylist.tokens)      then score += 0.4
+            if node.matches_any(denylist.patterns)     then score += 0.6
+        }
+        return { risk.score: clamp(score,0,1) }
+    }
+
+    // 5.3: Cross-pollution / covert-channel checks (no hidden grafting of data). [file:2]
+    function enforce_no_cross_pollution(ast, context) -> ast_clean {
+        forbidden.channels = ["covert_steganography","hidden_sideband","neuro_coercion"]
+        foreach edge in ast.dataflows {
+            if edge.channel in forbidden.channels {
+                edge.block()
+                audit.log("cross-pollution-blocked", edge)
+            }
+        }
+        return ast
+    }
+
+    // 5.4: Main entry – sanitize ALN program before execution
+    function sanitize_program(aln_source) -> sanitized_source {
+        ast = parse(aln_source)
+        rpt = scan_for_poison(ast)
+        if rpt.risk.score > 0.0 {
+            audit.log("aln.poison_detected", rpt)
+            // HARD FAIL: do not execute.
+            throw "ALN_SANITIZER_BLOCK"
+        }
+        ast2 = enforce_no_cross_pollution(ast, env.context)
+        ast3 = normalize_unknowns(ast2, define_if_unknown)
+        return serialize(ast3)
+    }
+}
+
+// -----------------------------
+// SECTION 6: NEUROMORPHIC / BCI / EEG DATASETS PATTERN
+// -----------------------------
+type.dataset.neuro {
+    id:        hex32
+    subject.id: string
+    modality:  list["EEG","ECoG","fMRI","SpikeTrain","BCI_Event"]
+    sampling.hz: int
+    duration.s:  int
+    storage.uri: string
+    consent.doc.hash: hex64
+    rights.scope: enum["RESEARCH","CLINICAL","COMMERCIAL_PROHIBITED"]
+}
+
+policy neuro.data.rights {
+    require dataset.rights.scope != "COMMERCIAL_PROHIBITED" for token.binding
+    require consent.doc.hash != null
+    require human.in.the.loop == required
+}
+
+// Example: bind an EEG dataset to an augmentation experiment in Unity sandbox. [file:4]
+experiment AugHum_EEG_Study_001 {
+    dataset: dataset.neuro {
+        id:           0xEE1122AA
+        subject.id:   "SUBJ-0001"
+        modality:     ["EEG"]
+        sampling.hz:  512
+        duration.s:   900
+        storage.uri:  "aln://secure/neuro/SUBJ-0001/session-1"
+        consent.doc.hash: 0x9F8E7D6C5B4A3921
+        rights.scope: "RESEARCH"
+    }
+    target: Unity_AU_Sandbox
+    device: NeuroPort_v9
+    policy: [ai.ethics.compliance.v2, neuro.data.rights, ai.reality.boundary]
+}
+
+// -----------------------------
+// SECTION 7: EXECUTION GUARD – ALWAYS SANITIZE FIRST
+// -----------------------------
+protocol aln.execute.safe {
+    step 0: raw = load.source()
+    step 1: safe = aln.self_sanitize.v1.sanitize_program(raw)
+    step 2: engine.run(safe) with {
+        domain:  "simulation"
+        logging: "immutable_blockchain"
+        audit:   "enabled"
+    }
+}
